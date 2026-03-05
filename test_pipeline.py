@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tracking.sort_tracker import SortTracker
 from tracking.sort_algorithm import KalmanBoxTracker
 from behavior.behavior_analyzer import BehaviorAnalyzer
+from weapon_verifier import WeaponVerifier
 
 
 def check(name, ok, detail=""):
@@ -183,6 +184,60 @@ def test_crowd_density():
         check("Crowd Density Alert", False, "no tracked objects returned")
 
 
+# ---- Test 7: WeaponVerifier Confirmation ----------------------------------
+
+def test_weapon_verifier():
+    """
+    Validate the multi-frame weapon confidence accumulation system.
+
+    Sub-tests
+    ---------
+    7a  Single-frame detection must NOT be confirmed.
+    7b  Three consecutive detections with avg_conf >= 0.6 MUST be confirmed.
+    7c  After `decay_after` missed frames the memory resets and the weapon
+        is no longer confirmed.
+    """
+    verifier = WeaponVerifier(min_frames=3, min_avg_conf=0.6, decay_after=3)
+
+    # A tracked person at a known bbox
+    tracked = [{"id": 1, "bbox": [100, 100, 200, 300]}]
+
+    # Weapon box that fully overlaps the person bbox (IoU > 0)
+    weapon = (110, 110, 190, 290, 0.75, "Gun")
+
+    # --- 7a: single frame → should NOT confirm --------------------
+    confirmed = verifier.update([weapon], tracked)
+    ok_7a = 1 not in confirmed
+    check(
+        "WeaponVerifier 7a: No confirm on 1 frame",
+        ok_7a,
+        f"confirmed_ids = {confirmed}",
+    )
+
+    # --- 7b: 2 more frames (total 3) → should confirm -------------
+    confirmed = verifier.update([weapon], tracked)  # frame 2
+    confirmed = verifier.update([weapon], tracked)  # frame 3
+    ok_7b = 1 in confirmed
+    mem = verifier.get_memory()
+    avg = mem[1]["confidence_sum"] / mem[1]["frames"] if 1 in mem else 0.0
+    check(
+        "WeaponVerifier 7b: Confirm after 3 frames (avg_conf >= 0.6)",
+        ok_7b,
+        f"confirmed_ids = {confirmed}, avg_conf = {avg:.3f}",
+    )
+
+    # --- 7c: 3 consecutive missed frames → memory should reset ----
+    confirmed = verifier.update([], tracked)  # missed frame 1
+    confirmed = verifier.update([], tracked)  # missed frame 2
+    confirmed = verifier.update([], tracked)  # missed frame 3 → decay fires
+    ok_7c = 1 not in confirmed and 1 not in verifier.get_memory()
+    check(
+        "WeaponVerifier 7c: Memory reset after decay frames",
+        ok_7c,
+        f"confirmed_ids = {confirmed}, memory = {verifier.get_memory()}",
+    )
+
+
 # ---- Run all tests ---------------------------------------------------------
 
 if __name__ == "__main__":
@@ -197,6 +252,7 @@ if __name__ == "__main__":
     test_zone_intrusion()
     test_weapon_flag()
     test_crowd_density()
+    test_weapon_verifier()
 
     print()
     print("-" * 60)
