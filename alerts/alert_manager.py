@@ -1,7 +1,10 @@
 from typing import Dict, Any, List, Optional
+import logging
 import time
 from alerts.alert_rules import AlertRules
 from utils.time_utils import get_current_timestamp_str
+
+logger = logging.getLogger(__name__)
 
 # Import database persistence functions
 try:
@@ -42,10 +45,15 @@ class AlertManager:
         self._throttle_cache: Dict[tuple, float] = {}
 
     def _get_throttle_key(self, decision: Dict[str, Any]) -> tuple:
-        """Generate a throttle key from person_id and primary behavior."""
+        """Generate a throttle key from person_id and behavior set.
+        
+        Uses an order-independent representation of behaviors (sorted tuple)
+        so identical behavior sets in different orders yield the same key.
+        """
         person_id = decision.get("person_id", "unknown")
         behaviors = decision.get("behaviors", [])
-        behavior_key = behaviors[0] if behaviors else "general"
+        # Normalize: deduplicate via set, sort for consistency, convert to tuple
+        behavior_key = tuple(sorted(set(behaviors))) if behaviors else ("general",)
         return (person_id, behavior_key)
 
     def _is_throttled(self, decision: Dict[str, Any]) -> bool:
@@ -126,8 +134,8 @@ class AlertManager:
                         risk_level=decision["threat_level"].lower(),
                         status="open"
                     )
-            except Exception as e:
-                print(f"[AlertManager] Warning: Failed to persist alert/incident to DB: {e}")
+            except Exception:
+                logger.exception("Failed to persist alert/incident to DB")
         
         # Console output for debugging
         print(f"\n{'='*60}")
