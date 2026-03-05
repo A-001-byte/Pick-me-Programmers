@@ -1,71 +1,90 @@
 """
-ThreatSense-AI — Risk Engine Main Pipeline
-============================================
-Simulates a real-time surveillance feed by sending tracked-person data
-through the Risk Engine decision layer.
+main.py
+───────
+Entry point for the ThreatSense-AI real-time surveillance system.
 
 Usage:
-    python main.py
+    python main.py                           # webcam (default)
+    python main.py --source rtsp://...       # RTSP stream
+    python main.py --source video.mp4        # video file
+    python main.py --person-conf 0.5 --weapon-conf 0.4
 """
 
-import json
-import time
-from engine.risk_engine import RiskEngine
-from risk_logging.event_logger import EventLogger
+from __future__ import annotations
 
-logger = EventLogger("MainPipeline")
+import argparse
 
-def main():
-    logger.info("ThreatSense-AI Risk Engine starting up...")
-    
-    engine = RiskEngine()
-    
-    # ---------------------------------------------------------------
-    # Simulated frames from tracking pipeline (Members 1 & 2 output)
-    # Each frame is a list of tracked persons in that moment
-    # ---------------------------------------------------------------
-    simulated_frames = [
-        # Frame 1: Two people, minor activity
-        [
-            {"id": 1, "bbox": [100, 200, 180, 350], "speed": 1.2, "loitering": True,  "zone_intrusion": False, "weapon_detected": False},
-            {"id": 2, "bbox": [300, 120, 380, 330], "speed": 0.5, "loitering": False, "zone_intrusion": False, "weapon_detected": False},
-        ],
-        # Frame 2: Person 1 continues loitering, Person 2 enters restricted zone
-        [
-            {"id": 1, "bbox": [105, 205, 185, 355], "speed": 0.8, "loitering": True,  "zone_intrusion": False, "weapon_detected": False},
-            {"id": 2, "bbox": [310, 130, 390, 340], "speed": 2.8, "loitering": False, "zone_intrusion": True,  "weapon_detected": False},
-        ],
-        # Frame 3: Person 1 now intrudes zone (escalation!), Person 3 appears with weapon
-        [
-            {"id": 1, "bbox": [110, 210, 190, 360], "speed": 3.5, "loitering": True,  "zone_intrusion": True,  "weapon_detected": False},
-            {"id": 3, "bbox": [500, 100, 580, 300], "speed": 0.2, "loitering": False, "zone_intrusion": True,  "weapon_detected": True},
-        ],
-        # Frame 4: All calm — demonstrates decay
-        [
-            {"id": 1, "bbox": [115, 215, 195, 365], "speed": 0.3, "loitering": False, "zone_intrusion": False, "weapon_detected": False},
-            {"id": 2, "bbox": [320, 140, 400, 350], "speed": 0.4, "loitering": False, "zone_intrusion": False, "weapon_detected": False},
-        ],
-    ]
-    
-    for frame_idx, frame in enumerate(simulated_frames):
-        print(f"\n{'='*60}")
-        logger.info(f"Processing Frame {frame_idx + 1} — {len(frame)} person(s) detected")
-        print(f"{'='*60}")
-        
-        results = engine.process_frame(frame)
-        
-        for r in results:
-            print(f"\n  Person {r['person_id']}:")
-            print(f"    Score  : {r['risk_score']}")
-            print(f"    Level  : {r['threat_level']}")
-            print(f"    Reasons:")
-            for reason in r["reasons"]:
-                print(f"      - {reason}")
-        
-        # Simulate small time gap between frames
-        time.sleep(0.5)
-    
-    logger.info("Pipeline simulation complete.")
+from core.pipeline import SurveillancePipeline
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="ThreatSense-AI — real-time weapon surveillance",
+    )
+    p.add_argument(
+        "--source",
+        default="0",
+        help="Video source: webcam index (0), file path, or RTSP URL "
+             "(default: 0)",
+    )
+    p.add_argument(
+        "--person-conf",
+        type=float,
+        default=0.4,
+        help="Person detection confidence threshold (default: 0.4)",
+    )
+    p.add_argument(
+        "--weapon-conf",
+        type=float,
+        default=0.3,
+        help="Weapon detection confidence threshold (default: 0.3)",
+    )
+    p.add_argument(
+        "--person-model",
+        default="yolov8x.pt",
+        help="Path to the person detector model (default: yolov8x.pt)",
+    )
+    p.add_argument(
+        "--weapon-model",
+        default=None,
+        help="Path to the weapon detector model "
+             "(default: models/weapon_detector.pt)",
+    )
+    p.add_argument(
+        "--armed-threshold",
+        type=float,
+        default=0.65,
+        help="Min weapon confidence to label person as armed (default: 0.65)",
+    )
+    p.add_argument(
+        "--device",
+        default="0",
+        help="Inference device: GPU index or 'cpu' (default: 0)",
+    )
+    return p.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
+    # Allow bare integer for webcam index
+    source = int(args.source) if args.source.isdigit() else args.source
+
+    pipeline = SurveillancePipeline(
+        source=source,
+        person_conf=args.person_conf,
+        weapon_conf=args.weapon_conf,
+        armed_threshold=args.armed_threshold,
+        person_model=args.person_model,
+        weapon_model=args.weapon_model,
+        device=int(args.device) if args.device.isdigit() else args.device,
+    )
+
+    print("╔══════════════════════════════════════╗")
+    print("║     ThreatSense-AI  •  Surveillance  ║")
+    print("╚══════════════════════════════════════╝")
+    pipeline.run()
+
 
 if __name__ == "__main__":
     main()
