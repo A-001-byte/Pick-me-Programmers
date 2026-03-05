@@ -3,13 +3,14 @@ import time
 from alerts.alert_rules import AlertRules
 from utils.time_utils import get_current_timestamp_str
 
-# Import database persistence function
+# Import database persistence functions
 try:
-    from backend.database import add_alert as db_add_alert
+    from backend.database import add_alert as db_add_alert, add_incident as db_add_incident
     DB_AVAILABLE = True
 except ImportError:
     DB_AVAILABLE = False
     db_add_alert = None
+    db_add_incident = None
 
 
 def normalize_risk_score(raw_score: float) -> float:
@@ -114,8 +115,19 @@ class AlertManager:
                     risk_level=decision["threat_level"].lower(),
                     camera_id=self.camera_id
                 )
+
+                # Promote high-priority detections to incidents
+                if db_add_incident is not None and decision["threat_level"].lower() in ("high", "critical"):
+                    db_add_incident(
+                        title=f"{event_type}: ID {decision['person_id']}",
+                        description=f"Automated incident for {decision['person_id']}. Reasons: {', '.join(decision.get('reasons', []))}",
+                        event_type=event_type,
+                        location="Main Entrance",  # Could be dynamic if configured
+                        risk_level=decision["threat_level"].lower(),
+                        status="open"
+                    )
             except Exception as e:
-                print(f"[AlertManager] Warning: Failed to persist alert to DB: {e}")
+                print(f"[AlertManager] Warning: Failed to persist alert/incident to DB: {e}")
         
         # Console output for debugging
         print(f"\n{'='*60}")
