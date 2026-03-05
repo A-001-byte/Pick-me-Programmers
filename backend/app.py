@@ -16,28 +16,46 @@ def create_app():
     # Initialize the database on startup
     init_db()
 
-    # Start the AI pipeline in a background thread
-    def run_pipeline():
-        person_model = "models/yolov8m_fixed.pt"
-        weapon_model = "models/weapon_detector_fixed.pt"
-        
-        # Check if models exist and are valid files (directories will fail in YOLO)
-        if not os.path.isfile(person_model):
-            print(f"[backend] Warning: {person_model} not found or is a directory. Falling back to models/yolov8n.pt")
-            person_model = "models/yolov8n.pt"
-        
-        if not os.path.isfile(weapon_model):
-            print(f"[backend] Warning: {weapon_model} not found or is a directory. Weapon detection may be disabled or use default.")
-            # WeaponDetector will use its internal default (models/weapon_detector.pt) 
-            # so we let it try, or pass None to use internal default.
-            weapon_model = None
+    # --- Model Validation (Fail Fast) ---
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    
+    # Primary models (in root/models)
+    person_model = os.path.join(root_dir, "models", "yolov8m_fixed.pt")
+    weapon_model = os.path.join(root_dir, "models", "weapon_detector_fixed.pt")
+    # Fallback model (in root)
+    fallback_model = os.path.join(root_dir, "yolo26n.pt")
 
-        print(f"[backend] Starting AI Surveillance Pipeline in background... (Person: {person_model}, Weapon: {weapon_model})")
+    if not os.path.isfile(person_model):
+        print(f"[backend] Warning: Primary person model not found at {person_model}")
+        print(f"        Attempting fallback to {fallback_model}...")
+        
+        if not os.path.isfile(fallback_model):
+            error_msg = (
+                f"Critical Error: No person detection models found!\n"
+                f"  Attempted Primary: {person_model}\n"
+                f"  Attempted Fallback: {fallback_model}\n"
+                "Please ensure at least the fallback model 'yolo26n.pt' is present in the root directory."
+            )
+            print(f"[ERROR] {error_msg}")
+            raise RuntimeError(error_msg)
+        
+        person_model = fallback_model
+    
+    if not os.path.isfile(weapon_model):
+        print(f"[backend] Warning: Weapon model not found at {weapon_model}")
+        print("        Weapon detection will use internal defaults or be disabled.")
+        weapon_model = None
+
+    # Start the AI pipeline in a background thread
+    def run_pipeline(p_model, w_model):
+        print("[backend] Starting AI Surveillance Pipeline in background...")
+        print(f"        > Person Model: {p_model}")
+        print(f"        > Weapon Model: {w_model}")
         try:
             pipeline = SurveillancePipeline(
                 source=0, # Default webcam
-                person_model=person_model,
-                weapon_model=weapon_model,
+                person_model=p_model,
+                weapon_model=w_model,
                 headless=True,
                 imgsz=320,       # Smaller for faster inference
                 weapon_skip=8,   # Run weapon detection less frequently
@@ -50,8 +68,16 @@ def create_app():
     app = Flask(__name__)
 
     # Start the AI pipeline thread after Flask app is created
-    thread = threading.Thread(target=run_pipeline, daemon=True)
-    thread.start()
+    # Guard against duplicate threads when using the Werkzeug reloader
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or os.environ.get("FLASK_DEBUG") != "1":
+        thread = threading.Thread(
+            target=run_pipeline, 
+            args=(person_model, weapon_model), 
+            daemon=True
+        )
+        thread.start()
+    else:
+        print("[backend] Reloader detected, skipping pipeline startup in parent process...")
     limiter.init_app(app)
 
     # --- SECRET_KEY: load from env, fail in production if missing ---
