@@ -26,14 +26,23 @@ def create_app():
         
         # Check if models exist and are valid files
         if not os.path.isfile(person_model):
-            print(f"[backend] Warning: {person_model} not found. Falling back to backend/models/yolov8n.pt")
-            person_model = os.path.join(os.path.dirname(__file__), "models", "yolov8n.pt")
+            fallback_model = os.path.join(os.path.dirname(__file__), "models", "yolov8n.pt")
+            print(f"[backend] Warning: {person_model} not found. Falling back to {fallback_model}")
+            
+            # Explicitly validate fallback exists
+            if not os.path.isfile(fallback_model):
+                print(f"[ERROR] Critical: Fallback person model not found at {fallback_model}")
+                print(f"        Tried: 1. {person_model}")
+                print(f"               2. {fallback_model}")
+                sys.exit(1)
+            
+            person_model = fallback_model
         
         if not os.path.isfile(weapon_model):
             print(f"[backend] Warning: {weapon_model} not found. Weapon detection may be disabled or use default.")
             weapon_model = None
 
-        print(f"[backend] Starting AI Surveillance Pipeline in background...")
+        print("[backend] Starting AI Surveillance Pipeline in background...")
         print(f"        > Person Model: {person_model}")
         print(f"        > Weapon Model: {weapon_model}")
         try:
