@@ -1,0 +1,7 @@
+ultralytics==8.0.200
+opencv-python==4.8.1.78
+Flask==3.0.0
+numpy==1.26.0
+pandas==2.1.1
+# ByteTrack (install from source or appropriate repository)
+# bytetrack
