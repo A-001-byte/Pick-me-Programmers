@@ -1,0 +1,6 @@
+{
+    "loitering": 20,
+    "zone_intrusion": 35,
+    "weapon_detected": 90,
+    "running": 15
+}
