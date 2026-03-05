@@ -83,10 +83,12 @@ export default function UserManagement() {
     try {
       await createUser({ username: formUsername, password: formPassword, role: formRole });
       await fetchUsers();
+      setError(null);
       setShowAddModal(false);
       resetForm();
     } catch (err) {
       console.error('Failed to create user:', err);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setActionLoading(false);
     }
@@ -106,11 +108,13 @@ export default function UserManagement() {
       }
       await updateUser(selectedUser.id, updateData);
       await fetchUsers();
+      setError(null);
       setShowEditModal(false);
       setSelectedUser(null);
       resetForm();
     } catch (err) {
       console.error('Failed to update user:', err);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setActionLoading(false);
     }
@@ -122,10 +126,12 @@ export default function UserManagement() {
     try {
       await deleteUser(selectedUser.id);
       await fetchUsers();
+      setError(null);
       setShowDeleteModal(false);
       setSelectedUser(null);
     } catch (err) {
       console.error('Failed to delete user:', err);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setActionLoading(false);
     }
@@ -157,7 +163,7 @@ export default function UserManagement() {
       <div className="p-6">
         <div className="mb-6">
           <h1 className="text-[#00e5ff] font-mono text-sm uppercase tracking-widest mb-1">👥 OPERATORS</h1>
-          <p className="text-zinc-600 text-xs font-mono">// SYSTEM ACCESS CONTROL PANEL</p>
+          <p className="text-zinc-600 text-xs font-mono">{'// SYSTEM ACCESS CONTROL PANEL'}</p>
         </div>
 
         {/* Error Banner */}
@@ -200,7 +206,7 @@ export default function UserManagement() {
             </div>
 
             {loading ? (
-              <p className="text-[#00e5ff]/50 text-xs font-mono text-center py-8">// LOADING USER DATABASE...</p>
+              <p className="text-[#00e5ff]/50 text-xs font-mono text-center py-8">{'// LOADING USER DATABASE...'}</p>
             ) : (
               <div className="border border-[#00e5ff]/20 rounded overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[800px]">
@@ -276,7 +282,7 @@ export default function UserManagement() {
                     {filtered.length === 0 && (
                       <tr>
                         <td colSpan={5} className="p-8 text-center text-zinc-600 text-xs font-mono">
-                          // NO OPERATORS FOUND
+                          {'// NO OPERATORS FOUND'}
                         </td>
                       </tr>
                     )}

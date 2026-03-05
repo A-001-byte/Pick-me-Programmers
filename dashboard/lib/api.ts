@@ -28,12 +28,13 @@ export async function apiFetch(
         headers,
     });
 
-    // Handle auth errors globally
+    // Handle auth errors globally - treat any 401 as auth failure
     if (res.status === 401) {
-        const data = await res.clone().json().catch(() => ({}));
-        if (data.error === "Invalid token" || data.error === "Token has expired" || data.error === "Token is missing") {
-            handleAuthError();
-        }
+        // Optionally log the body for debugging
+        res.clone().json().catch(() => ({})).then((data) => {
+            console.warn("[api] 401 Unauthorized:", data?.error || "Unknown auth error");
+        });
+        handleAuthError();
     }
 
     return res;
@@ -83,7 +84,7 @@ export async function dismissAlert(alertId: number) {
         method: "POST",
     });
     if (!res.ok) {
-        const error = await res.json();
+        const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to dismiss alert");
     }
     return res.json();
@@ -94,7 +95,7 @@ export async function acknowledgeAlert(alertId: number) {
         method: "POST",
     });
     if (!res.ok) {
-        const error = await res.json();
+        const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to acknowledge alert");
     }
     return res.json();
@@ -105,7 +106,7 @@ export async function resolveAlert(alertId: number) {
         method: "POST",
     });
     if (!res.ok) {
-        const error = await res.json();
+        const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to resolve alert");
     }
     return res.json();
@@ -116,7 +117,7 @@ export async function resolveAlert(alertId: number) {
 export async function getIncident(incidentId: number) {
     const res = await apiFetch(`/incidents/${incidentId}`);
     if (!res.ok) {
-        const error = await res.json();
+        const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to get incident");
     }
     return res.json();
@@ -127,7 +128,7 @@ export async function resolveIncident(incidentId: number) {
         method: "POST",
     });
     if (!res.ok) {
-        const error = await res.json();
+        const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to resolve incident");
     }
     return res.json();
@@ -138,7 +139,7 @@ export async function escalateIncident(incidentId: number) {
         method: "POST",
     });
     if (!res.ok) {
-        const error = await res.json();
+        const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to escalate incident");
     }
     return res.json();
@@ -165,7 +166,7 @@ export async function createUser(data: CreateUserData) {
         body: JSON.stringify(data),
     });
     if (!res.ok) {
-        const error = await res.json();
+        const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to create user");
     }
     return res.json();
@@ -177,7 +178,7 @@ export async function updateUser(userId: number, data: UpdateUserData) {
         body: JSON.stringify(data),
     });
     if (!res.ok) {
-        const error = await res.json();
+        const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to update user");
     }
     return res.json();
@@ -188,7 +189,7 @@ export async function deleteUser(userId: number) {
         method: "DELETE",
     });
     if (!res.ok) {
-        const error = await res.json();
+        const error = await res.json().catch(() => ({}));
         throw new Error(error.error || "Failed to delete user");
     }
     return res.json();

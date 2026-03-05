@@ -14,9 +14,9 @@ def main():
 
     if not os.path.exists(args.source):
         print(f"❌ Error: Source '{args.source}' not found.")
-        return
+        sys.exit(1)
 
-    print(f"--- Accuracy Check ---")
+    print("--- Accuracy Check ---")
     print(f"Source: {args.source}")
     
     # Load models
@@ -27,7 +27,7 @@ def main():
         print("✅ Models loaded successfully.")
     except Exception as e:
         print(f"❌ Failed to load models: {e}")
-        return
+        sys.exit(1)
 
     # Run inference
     print("Running inference...")

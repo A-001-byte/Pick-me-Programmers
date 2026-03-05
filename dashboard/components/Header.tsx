@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 
 export function Header() {
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
 
   useEffect(() => {
+    // Set initial time on client only to avoid hydration mismatch
+    setCurrentTime(new Date());
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
@@ -46,10 +48,10 @@ export function Header() {
           </div>
         </div>
         <div className="flex items-center gap-2 font-mono">
-          <span className="text-[#00e5ff]/50 text-xs">//</span>
-          <span className="text-[#00e5ff] text-xs tracking-wider">{formatDate(currentTime)}</span>
+          <span className="text-[#00e5ff]/50 text-xs">{'//'}</span>
+          <span className="text-[#00e5ff] text-xs tracking-wider">{currentTime ? formatDate(currentTime) : '--'}</span>
           <span className="text-[#00e5ff]/50 text-xs">::</span>
-          <span className="text-[#00e5ff] text-xs tracking-wider">{formatTime(currentTime)}</span>
+          <span className="text-[#00e5ff] text-xs tracking-wider">{currentTime ? formatTime(currentTime) : '--:--:--'}</span>
         </div>
       </div>
     </div>

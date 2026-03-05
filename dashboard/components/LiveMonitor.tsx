@@ -134,11 +134,18 @@ export default function LiveMonitor() {
     router.push(`/incidents?search=${encodeURIComponent(alert.event_type)}`);
   };
 
-  const handleBannerDismiss = async () => {
+  const handleBannerDismiss = () => {
+    // Only update local UI state - don't call backend dismiss
+    // Backend alert dismissal should be done via a separate explicit action
+    setBannerDismissed(true);
+  };
+
+  const handleDismissBannerAlert = async () => {
+    // Explicit action to dismiss the alert in the backend
     if (activeAlerts.length > 0) {
       await handleDismissAlert(activeAlerts[0].id);
+      setBannerDismissed(true);
     }
-    setBannerDismissed(true);
   };
 
   const showBanner = !bannerDismissed && activeAlerts.length > 0;
@@ -167,15 +174,21 @@ export default function LiveMonitor() {
                   ⚠️ ACTIVE THREAT: {activeAlerts[0]?.event_type}
                 </h3>
                 <p className="text-zinc-400 text-xs font-mono mt-0.5">
-                  // Detection at {activeAlerts[0]?.location} - Review recommended
+                  {`Detection at ${activeAlerts[0]?.location} - Review recommended`}
                 </p>
               </div>
               <button
-                onClick={handleBannerDismiss}
+                onClick={handleDismissBannerAlert}
                 disabled={actionLoading === activeAlerts[0]?.id}
                 className="px-3 py-1.5 bg-transparent border border-red-500/50 text-red-400 hover:bg-red-500/20 hover:shadow-[0_0_15px_rgba(239,68,68,0.3)] rounded font-mono text-xs uppercase tracking-wider transition-all disabled:opacity-50"
               >
-                {actionLoading === activeAlerts[0]?.id ? '...' : '❌ DISMISS'}
+                {actionLoading === activeAlerts[0]?.id ? '...' : '🗑️ DISMISS ALERT'}
+              </button>
+              <button
+                onClick={handleBannerDismiss}
+                className="px-2 py-1.5 text-zinc-500 hover:text-zinc-300 font-mono text-xs transition-all"
+              >
+                ✕
               </button>
             </div>
           </div>
@@ -206,7 +219,7 @@ export default function LiveMonitor() {
                 ></div>
                 
                 <img
-                  src="http://localhost:5000/api/video_feed"
+                  src={process.env.NEXT_PUBLIC_VIDEO_FEED_URL || "/api/video_feed"}
                   alt="Live Camera Feed"
                   className="w-full h-full object-contain"
                   onError={(e) => {

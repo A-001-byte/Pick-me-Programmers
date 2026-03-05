@@ -39,11 +39,12 @@ class AlertRules:
         
         if "weapon_detected" in behaviors or score >= 100 or threat_level == "CRITICAL":
             return "CRITICAL_ALARM"
+        elif "zone_intrusion" in behaviors:
+            # Zone intrusion always warrants security alert, checked before score thresholds
+            return "SECURITY_ALERT"
         elif score >= 70 or threat_level == "HIGH":
             return "SECURITY_ALERT"
         elif score >= 50 or threat_level == "SUSPICIOUS":
             return "WARNING"
-        elif "zone_intrusion" in behaviors:
-            return "SECURITY_ALERT"
         else:
             return "INFO"

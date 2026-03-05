@@ -30,7 +30,7 @@ export default function Sidebar({ className = "" }: { className?: string }) {
           </div>
           <div>
             <h2 className="text-[#00e5ff] text-sm font-mono font-bold tracking-widest">THREATSENSE</h2>
-            <p className="text-[#00e5ff]/40 text-[10px] font-mono tracking-wider">v2.0.4 // ACTIVE</p>
+            <p className="text-[#00e5ff]/40 text-[10px] font-mono tracking-wider">{'v2.0.4 // ACTIVE'}</p>
           </div>
         </div>
       </div>
@@ -51,7 +51,7 @@ export default function Sidebar({ className = "" }: { className?: string }) {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1">
-        <p className="px-3 mb-2 text-[#00e5ff]/40 text-[10px] font-mono uppercase tracking-widest">// NAVIGATION</p>
+        <p className="px-3 mb-2 text-[#00e5ff]/40 text-[10px] font-mono uppercase tracking-widest">{'// NAVIGATION'}</p>
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname?.startsWith(item.path);

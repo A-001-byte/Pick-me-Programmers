@@ -23,8 +23,8 @@ def create_app():
         
         # Check if models exist and are valid files (directories will fail in YOLO)
         if not os.path.isfile(person_model):
-            print(f"[backend] Warning: {person_model} not found or is a directory. Falling back to yolo26n.pt")
-            person_model = "yolo26n.pt"
+            print(f"[backend] Warning: {person_model} not found or is a directory. Falling back to models/yolov8n.pt")
+            person_model = "models/yolov8n.pt"
         
         if not os.path.isfile(weapon_model):
             print(f"[backend] Warning: {weapon_model} not found or is a directory. Weapon detection may be disabled or use default.")
@@ -44,10 +44,11 @@ def create_app():
         except Exception as e:
             print(f"[backend] AI Pipeline error: {e}")
 
+    app = Flask(__name__)
+
+    # Start the AI pipeline thread after Flask app is created
     thread = threading.Thread(target=run_pipeline, daemon=True)
     thread.start()
-
-    app = Flask(__name__)
     limiter.init_app(app)
 
     # --- SECRET_KEY: load from env, fail in production if missing ---

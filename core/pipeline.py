@@ -75,8 +75,15 @@ class SurveillancePipeline:
         self.persist_frames = persist_frames
         self.device = device
         self.headless = headless
+        
+        # Validate skip parameters to prevent ZeroDivisionError in modulo operations
+        if not isinstance(weapon_skip, int) or weapon_skip < 1:
+            weapon_skip = 1
+        if not isinstance(risk_skip, int) or risk_skip < 1:
+            risk_skip = 1
         self.weapon_skip = weapon_skip
         self.risk_skip = risk_skip
+        
         self.imgsz = imgsz
         self._frame_count = 0
 
@@ -143,11 +150,9 @@ class SurveillancePipeline:
                     break
 
                 # ── 1. Detect + track persons (ByteTrack) ────────────
-                t_p_start = time.perf_counter()
                 tracked = self.person_det.track(
                     frame, conf=self.person_conf,
                 )
-                t_p_end = time.perf_counter()
 
                 # ── 2. Per-person weapon detection ───────────────────
                 active_ids: set[int] = set()
@@ -187,14 +192,13 @@ class SurveillancePipeline:
                                 "weapons": high_conf,
                                 "ttl": self.persist_frames,
                             }
-                        elif tid in self._weapon_buffer:
-                            self._weapon_buffer[tid]["ttl"] -= 1
-                            if self._weapon_buffer[tid]["ttl"] <= 0:
-                                del self._weapon_buffer[tid]
-                    else:
-                        # On skipped frames, we don't clear or add to all_weapon_dets,
-                        # but we still need to know what's in the visual buffer.
-                        pass
+                    
+                    # TTL decay happens on EVERY frame (not just detection frames)
+                    # so persist_frames corresponds to actual frames, not detection cycles
+                    if tid in self._weapon_buffer and not (should_detect and high_conf if should_detect else False):
+                        self._weapon_buffer[tid]["ttl"] -= 1
+                        if self._weapon_buffer[tid]["ttl"] <= 0:
+                            del self._weapon_buffer[tid]
 
                     buffered = self._weapon_buffer.get(tid)
                     is_armed_display = buffered is not None
@@ -249,6 +253,13 @@ class SurveillancePipeline:
                     # Store decisions for drawing
                     for rd in risk_decisions:
                         self._risk_decisions[rd["person_id"]] = rd
+                
+                # Prune stale entries from _risk_decisions (track IDs no longer active)
+                # This prevents cached decisions from being applied to recycled track IDs
+                current_tids = {ps["track_id"] for ps in person_states}
+                stale_tids = [tid for tid in self._risk_decisions if tid not in current_tids]
+                for tid in stale_tids:
+                    del self._risk_decisions[tid]
                 
                 # Update person_states with risk info
                 for ps in person_states:

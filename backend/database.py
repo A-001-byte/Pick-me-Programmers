@@ -163,13 +163,47 @@ def add_alert(person_id, event_type, risk_score, risk_level, camera_id="CAM-01",
     -------
     int
         The ID of the newly inserted alert.
+    
+    Raises
+    ------
+    ValueError
+        If required fields are empty or values are out of range.
     """
+    # Validate required fields
+    if not person_id or not str(person_id).strip():
+        raise ValueError("person_id cannot be empty")
+    if not event_type or not str(event_type).strip():
+        raise ValueError("event_type cannot be empty")
+    
+    # Validate and clamp risk_score to [0.0, 1.0]
+    try:
+        risk_score = float(risk_score)
+    except (ValueError, TypeError):
+        raise ValueError("risk_score must be a number")
+    risk_score = max(0.0, min(1.0, risk_score))
+    
+    # Validate and normalize risk_level
+    allowed_risk_levels = {"low", "medium", "high", "critical"}
+    risk_level = str(risk_level).strip().lower()
+    if risk_level not in allowed_risk_levels:
+        raise ValueError(f"risk_level must be one of {allowed_risk_levels}")
+    
+    # Validate and normalize status
+    allowed_statuses = {"active", "resolved", "dismissed"}
+    status = str(status).strip().lower().capitalize()  # Normalize: "Active", "Resolved", "Dismissed"
+    if status.lower() not in allowed_statuses:
+        status = "Active"  # Default to Active for unknown statuses
+    
+    # Sanitize string fields
+    camera_id = str(camera_id).strip() if camera_id else "CAM-01"
+    location = str(location).strip() if location else "Main Entrance"
+    
     with contextlib.closing(get_db_connection()) as conn:
         cursor = conn.cursor()
         cursor.execute(
             '''INSERT INTO alerts (person_id, event_type, risk_score, risk_level, camera_id, location, status)
                VALUES (?, ?, ?, ?, ?, ?, ?)''',
-            (person_id, event_type, risk_score, risk_level, camera_id, location, status)
+            (str(person_id).strip(), str(event_type).strip(), risk_score, risk_level, camera_id, location, status)
         )
         conn.commit()
         return cursor.lastrowid
@@ -198,13 +232,44 @@ def add_incident(title, description, event_type, location="Main Entrance", risk_
     -------
     int
         The ID of the newly inserted incident.
+    
+    Raises
+    ------
+    ValueError
+        If required fields are empty or values are invalid.
     """
+    # Validate required fields
+    if not title or not str(title).strip():
+        raise ValueError("title cannot be empty")
+    if not event_type or not str(event_type).strip():
+        raise ValueError("event_type cannot be empty")
+    
+    # Sanitize description (can be empty but should be string)
+    description = str(description).strip() if description else ""
+    
+    # Validate and normalize risk_level
+    allowed_risk_levels = {"low", "medium", "high", "critical"}
+    risk_level = str(risk_level).strip().lower()
+    if risk_level not in allowed_risk_levels:
+        raise ValueError(f"risk_level must be one of {allowed_risk_levels}")
+    
+    # Validate and normalize status
+    allowed_statuses = {"open", "resolved", "escalated", "false alarm"}
+    status = str(status).strip().lower()
+    if status not in allowed_statuses:
+        status = "open"  # Default to open for unknown statuses
+    # Capitalize for display consistency
+    status = status.title()
+    
+    # Sanitize location
+    location = str(location).strip() if location else "Main Entrance"
+    
     with contextlib.closing(get_db_connection()) as conn:
         cursor = conn.cursor()
         cursor.execute(
             '''INSERT INTO incidents (title, description, event_type, location, risk_level, status)
                VALUES (?, ?, ?, ?, ?, ?)''',
-            (title, description, event_type, location, risk_level, status)
+            (str(title).strip(), description, str(event_type).strip(), location, risk_level, status)
         )
         conn.commit()
         return cursor.lastrowid

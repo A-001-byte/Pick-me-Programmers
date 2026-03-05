@@ -52,11 +52,15 @@ def token_required(roles=None, optional=False):
                     return jsonify({'error': 'Permission denied. Invalid role.'}), 403
 
             except jwt.ExpiredSignatureError:
-                if optional:
+                # If optional and NO token was provided, allow anonymous access
+                # But if a token WAS provided (even if invalid/expired), reject
+                if optional and not token:
                     return f(*args, **kwargs)
                 return jsonify({'error': 'Token has expired'}), 401
             except jwt.InvalidTokenError:
-                if optional:
+                # If optional and NO token was provided, allow anonymous access
+                # But if a token WAS provided (even if invalid), reject
+                if optional and not token:
                     return f(*args, **kwargs)
                 return jsonify({'error': 'Invalid token'}), 401
 
@@ -131,19 +135,28 @@ def create_alert():
     location = data.get('location', 'Main Entrance')
     status = data.get('status', 'Active')
 
+    # Validate risk_score before calling add_alert
+    try:
+        risk_score_float = float(risk_score)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid risk_score: must be a number'}), 400
+
     try:
         alert_id = add_alert(
             person_id=person_id,
             event_type=event_type,
-            risk_score=float(risk_score),
+            risk_score=risk_score_float,
             risk_level=risk_level,
             camera_id=camera_id,
             location=location,
             status=status
         )
         return jsonify({'message': 'Alert created', 'id': alert_id}), 201
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.exception("Failed to create alert")
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @api_bp.route('/incidents', methods=['GET'])
@@ -193,8 +206,11 @@ def create_incident():
             status=status
         )
         return jsonify({'message': 'Incident created', 'id': incident_id}), 201
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.exception("Failed to create incident")
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @api_bp.route('/stats', methods=['GET'])
@@ -230,8 +246,9 @@ def get_users():
 
 
 @api_bp.route('/video_feed')
+@token_required(roles=['admin', 'security', 'operator', 'viewer'], optional=False)
 def video_feed():
-    """Video streaming route. Returns MJPEG stream."""
+    """Video streaming route. Returns MJPEG stream. Requires authentication."""
     def generate():
         while True:
             frame_bytes = stream_manager.get_frame_bytes()
@@ -388,7 +405,8 @@ def create_user():
         return jsonify({'message': 'User created', 'id': user_id}), 201
     except Exception as e:
         conn.close()
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.exception("Failed to create user")
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @api_bp.route('/users/<int:user_id>', methods=['PUT'])
@@ -434,8 +452,13 @@ def update_user(user_id):
         values.append(data['role'])
     
     if 'status' in data:
+        allowed_statuses = {'active', 'inactive', 'suspended'}
+        status_val = str(data['status']).strip().lower()
+        if status_val not in allowed_statuses:
+            conn.close()
+            return jsonify({'error': f'Invalid status. Must be one of: {", ".join(allowed_statuses)}'}), 400
         updates.append('status = ?')
-        values.append(data['status'])
+        values.append(data['status'].strip().title())  # Normalize to Title Case
     
     if not updates:
         conn.close()
@@ -451,7 +474,8 @@ def update_user(user_id):
         return jsonify({'message': 'User updated', 'id': user_id}), 200
     except Exception as e:
         conn.close()
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.exception("Failed to update user")
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @api_bp.route('/users/<int:user_id>', methods=['DELETE'])

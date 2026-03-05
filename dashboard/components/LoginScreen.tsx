@@ -28,15 +28,40 @@ export default function LoginScreen() {
         setWaitingForFlash(true);
         const video = videoRef.current;
         if (video) {
+          let rafId: number | null = null;
+          let attempts = 0;
+          const maxAttempts = 600; // ~10 seconds at 60fps
+          
           const checkFlash = () => {
+            attempts++;
             // Redirect when video is near the end (last 0.3 seconds where flash occurs)
-            if (video.duration - video.currentTime <= 0.3) {
+            // or if we've waited too long (fallback timeout)
+            if ((video.duration && video.duration - video.currentTime <= 0.3) || attempts >= maxAttempts) {
               router.push('/monitor');
             } else {
-              requestAnimationFrame(checkFlash);
+              rafId = requestAnimationFrame(checkFlash);
             }
           };
-          checkFlash();
+          
+          // Handle video metadata not loading
+          const handleError = () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            router.push('/monitor');
+          };
+          
+          video.addEventListener('error', handleError, { once: true });
+          
+          // Start checking, with fallback if duration isn't ready
+          if (video.readyState >= 1 && video.duration) {
+            checkFlash();
+          } else {
+            video.addEventListener('loadedmetadata', () => checkFlash(), { once: true });
+            // Fallback timeout in case metadata never loads
+            setTimeout(() => {
+              if (rafId) cancelAnimationFrame(rafId);
+              router.push('/monitor');
+            }, 10000);
+          }
         } else {
           // Fallback if no video
           router.push('/monitor');
@@ -118,7 +143,7 @@ export default function LoginScreen() {
               <circle cx="12" cy="11" r="3"></circle>
             </svg>
             <h1 className="text-xl tracking-[3px] font-semibold text-white mb-1">THREATSENSE</h1>
-            <p className="font-mono text-[10px] text-zinc-400 tracking-[1px]">// SECURE UPLINK //</p>
+            <p className="font-mono text-[10px] text-zinc-400 tracking-[1px]">{'// SECURE UPLINK //'}</p>
           </div>
 
           {error && (

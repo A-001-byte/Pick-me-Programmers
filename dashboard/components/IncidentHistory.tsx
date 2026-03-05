@@ -97,11 +97,13 @@ export default function IncidentHistory() {
     try {
       await resolveIncident(incidentId);
       await fetchIncidents();
+      setError(null);
       if (selectedIncident?.id === incidentId) {
         setSelectedIncident(prev => prev ? { ...prev, status: 'Resolved' } : null);
       }
     } catch (err) {
       console.error('Failed to resolve incident:', err);
+      setError(err instanceof Error ? err.message : 'Failed to resolve incident');
     } finally {
       setActionLoading(null);
     }
@@ -112,11 +114,13 @@ export default function IncidentHistory() {
     try {
       await escalateIncident(incidentId);
       await fetchIncidents();
+      setError(null);
       if (selectedIncident?.id === incidentId) {
         setSelectedIncident(prev => prev ? { ...prev, status: 'Escalated' } : null);
       }
     } catch (err) {
       console.error('Failed to escalate incident:', err);
+      setError(err instanceof Error ? err.message : 'Failed to escalate incident');
     } finally {
       setActionLoading(null);
     }
@@ -150,7 +154,7 @@ export default function IncidentHistory() {
       <div className="p-6">
         <div className="mb-6">
           <h1 className="text-[#00e5ff] text-xl font-mono font-bold tracking-widest uppercase flex items-center gap-2">📋 INCIDENT LOG</h1>
-          <p className="text-zinc-500 text-sm font-mono mt-1">// Review and analyze detection events</p>
+          <p className="text-zinc-500 text-sm font-mono mt-1">{'// Review and analyze detection events'}</p>
         </div>
 
         {/* Error Banner */}
@@ -302,7 +306,7 @@ export default function IncidentHistory() {
                     {filtered.length === 0 && (
                       <tr>
                         <td colSpan={6} className="p-8 text-center text-zinc-600 text-xs font-mono">
-                          // NO INCIDENTS MATCHING CRITERIA
+                          {'// NO INCIDENTS MATCHING CRITERIA'}
                         </td>
                       </tr>
                     )}

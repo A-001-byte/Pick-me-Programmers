@@ -12,6 +12,21 @@ except ImportError:
     db_add_alert = None
 
 
+def normalize_risk_score(raw_score: float) -> float:
+    """Normalize risk score to 0.0-1.0 range.
+    
+    Handles both percentage (0-100) and fractional (0.0-1.0) inputs.
+    Returns clamped value in [0.0, 1.0].
+    """
+    if raw_score > 1.0:
+        # Assume percentage, convert to fraction
+        score = raw_score / 100.0
+    else:
+        score = raw_score
+    # Clamp to valid range
+    return max(0.0, min(1.0, score))
+
+
 class AlertManager:
     """Manages the generation and dispatch of security alerts."""
     
@@ -89,9 +104,8 @@ class AlertManager:
                 else:
                     event_type = "Suspicious Behavior"
                 
-                # Normalize risk_score to 0.0-1.0 range if it's a percentage
-                raw_score = decision["risk_score"]
-                risk_score = raw_score / 100.0 if raw_score > 1 else raw_score
+                # Normalize risk_score to 0.0-1.0 range
+                risk_score = normalize_risk_score(decision["risk_score"])
                 
                 db_add_alert(
                     person_id=str(decision["person_id"]),

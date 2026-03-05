@@ -93,7 +93,7 @@ def main() -> None:
     
     if args.cpu_optimized:
         print("[main] CPU optimization active: Using Nano model and 320px resolution.")
-        person_model = "yolo26n.pt" # Faster Nano model
+        person_model = "models/yolov8n.pt" # Faster Nano model
         imgsz = 320                  # Even lower resolution for CPU
         weapon_skip = 8              # Check weapons every 8 frames
         risk_skip = 5                # Check risk every 5 frames
