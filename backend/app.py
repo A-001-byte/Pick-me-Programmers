@@ -38,7 +38,10 @@ def create_app():
                 source=0, # Default webcam
                 person_model=person_model,
                 weapon_model=weapon_model,
-                headless=True
+                headless=True,
+                imgsz=320,       # Smaller for faster inference
+                weapon_skip=8,   # Run weapon detection less frequently
+                risk_skip=5,     # Run risk engine less frequently
             )
             pipeline.run()
         except Exception as e:

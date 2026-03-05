@@ -246,19 +246,44 @@ def get_users():
 
 
 @api_bp.route('/video_feed')
-@token_required(roles=['admin', 'security', 'operator', 'viewer'], optional=False)
 def video_feed():
-    """Video streaming route. Returns MJPEG stream. Requires authentication."""
+    """Video streaming route. Returns MJPEG stream.
+    
+    Supports authentication via:
+    - Authorization header (Bearer token)
+    - Query parameter (?token=xxx) for use with img/video tags
+    """
+    # Check for token in header or query param
+    token = None
+    if 'Authorization' in request.headers:
+        parts = request.headers['Authorization'].split()
+        if len(parts) == 2 and parts[0] == 'Bearer':
+            token = parts[1]
+    
+    # Fallback to query parameter for img/video tag support
+    if not token:
+        token = request.args.get('token')
+    
+    if token:
+        try:
+            jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token has expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+    else:
+        return jsonify({'error': 'Token is missing'}), 401
+
     def generate():
         while True:
             frame_bytes = stream_manager.get_frame_bytes()
             if frame_bytes is None:
-                time.sleep(0.1)
+                time.sleep(0.016)  # ~60 FPS check rate when no frame
                 continue
             
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            time.sleep(0.03)  # ~30 FPS limit for streaming
+            time.sleep(0.016)  # ~60 FPS streaming rate (browser will throttle if needed)
 
     return Response(generate(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')

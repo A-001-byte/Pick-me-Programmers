@@ -196,6 +196,22 @@ class WeaponVerifier:
         """Return a *copy* of the current weapon memory (for inspection / tests)."""
         return {pid: dict(entry) for pid, entry in self.weapon_memory.items()}
 
+    def get_confirmed_ids(self) -> Set[int]:
+        """
+        Return the set of currently confirmed armed person IDs.
+        
+        This is useful for frames where weapon detection is skipped -
+        it returns IDs that were confirmed in a previous update() call
+        and still meet the confirmation criteria.
+        """
+        confirmed: Set[int] = set()
+        for pid, entry in self.weapon_memory.items():
+            frames = entry["frames"]
+            avg_conf = entry["confidence_sum"] / frames if frames > 0 else 0.0
+            if frames >= self.min_frames and avg_conf >= self.min_avg_conf:
+                confirmed.add(pid)
+        return confirmed
+
     # ── private helpers ───────────────────────────────────────────────
 
     def _best_matching_person(
