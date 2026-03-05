@@ -18,7 +18,7 @@ from ultralytics import YOLO
 WeaponDetection = Tuple[int, int, int, int, float, str]
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_MODEL = PROJECT_ROOT / "models" / "weapon_detector.pt"
+DEFAULT_MODEL = PROJECT_ROOT / "models" / "weapon_detector_fixed.pt"
 
 # Classes to silently discard — "Gunmen" is a contextual label that
 # causes false positives; "person" is already handled by PersonDetector.
@@ -31,7 +31,7 @@ class WeaponDetector:
     def __init__(
         self,
         model_path: str | Path = DEFAULT_MODEL,
-        device: int | str = 0,
+        device: int | str | None = None,
         imgsz: int = 640,
     ) -> None:
         self.model = YOLO(str(model_path))
@@ -58,7 +58,7 @@ class WeaponDetector:
             conf=conf,
             device=self.device,
             imgsz=self.imgsz,
-            half=True,
+            half=False,
             verbose=False,
         )
 

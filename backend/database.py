@@ -138,6 +138,143 @@ def _seed_data(cursor):
         )
 
 
+def add_alert(person_id, event_type, risk_score, risk_level, camera_id="CAM-01", location="Main Entrance", status="Active"):
+    """
+    Persists a new alert to the database.
+    
+    Parameters
+    ----------
+    person_id : str
+        Unique identifier for the detected person.
+    event_type : str
+        Type of event detected (e.g., "Suspicious Behavior", "Weapon Detected").
+    risk_score : float
+        Computed risk score (0.0 to 1.0).
+    risk_level : str
+        Risk level classification ("low", "medium", "high", "critical").
+    camera_id : str
+        Camera identifier (default "CAM-01").
+    location : str
+        Location description (default "Main Entrance").
+    status : str
+        Alert status (default "Active").
+    
+    Returns
+    -------
+    int
+        The ID of the newly inserted alert.
+    
+    Raises
+    ------
+    ValueError
+        If required fields are empty or values are out of range.
+    """
+    # Validate required fields
+    if not person_id or not str(person_id).strip():
+        raise ValueError("person_id cannot be empty")
+    if not event_type or not str(event_type).strip():
+        raise ValueError("event_type cannot be empty")
+    
+    # Validate and clamp risk_score to [0.0, 1.0]
+    try:
+        risk_score = float(risk_score)
+    except (ValueError, TypeError):
+        raise ValueError("risk_score must be a number")
+    risk_score = max(0.0, min(1.0, risk_score))
+    
+    # Validate and normalize risk_level
+    allowed_risk_levels = {"low", "medium", "high", "critical"}
+    risk_level = str(risk_level).strip().lower()
+    if risk_level not in allowed_risk_levels:
+        raise ValueError(f"risk_level must be one of {allowed_risk_levels}")
+    
+    # Validate and normalize status
+    allowed_statuses = {"active", "resolved", "dismissed"}
+    status = str(status).strip().lower().capitalize()  # Normalize: "Active", "Resolved", "Dismissed"
+    if status.lower() not in allowed_statuses:
+        status = "Active"  # Default to Active for unknown statuses
+    
+    # Sanitize string fields
+    camera_id = str(camera_id).strip() if camera_id else "CAM-01"
+    location = str(location).strip() if location else "Main Entrance"
+    
+    with contextlib.closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            '''INSERT INTO alerts (person_id, event_type, risk_score, risk_level, camera_id, location, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?)''',
+            (str(person_id).strip(), str(event_type).strip(), risk_score, risk_level, camera_id, location, status)
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
+def add_incident(title, description, event_type, location="Main Entrance", risk_level="low", status="open"):
+    """
+    Persists a new incident to the database.
+    
+    Parameters
+    ----------
+    title : str
+        Short title for the incident.
+    description : str
+        Detailed description of the incident.
+    event_type : str
+        Type of event (e.g., "Suspicious Behavior", "Unauthorized Access").
+    location : str
+        Location description (default "Main Entrance").
+    risk_level : str
+        Risk level classification ("low", "medium", "high", "critical").
+    status : str
+        Incident status (default "open").
+    
+    Returns
+    -------
+    int
+        The ID of the newly inserted incident.
+    
+    Raises
+    ------
+    ValueError
+        If required fields are empty or values are invalid.
+    """
+    # Validate required fields
+    if not title or not str(title).strip():
+        raise ValueError("title cannot be empty")
+    if not event_type or not str(event_type).strip():
+        raise ValueError("event_type cannot be empty")
+    
+    # Sanitize description (can be empty but should be string)
+    description = str(description).strip() if description else ""
+    
+    # Validate and normalize risk_level
+    allowed_risk_levels = {"low", "medium", "high", "critical"}
+    risk_level = str(risk_level).strip().lower()
+    if risk_level not in allowed_risk_levels:
+        raise ValueError(f"risk_level must be one of {allowed_risk_levels}")
+    
+    # Validate and normalize status
+    allowed_statuses = {"open", "resolved", "escalated", "false alarm"}
+    status = str(status).strip().lower()
+    if status not in allowed_statuses:
+        status = "open"  # Default to open for unknown statuses
+    # Capitalize for display consistency
+    status = status.title()
+    
+    # Sanitize location
+    location = str(location).strip() if location else "Main Entrance"
+    
+    with contextlib.closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            '''INSERT INTO incidents (title, description, event_type, location, risk_level, status)
+               VALUES (?, ?, ?, ?, ?, ?)''',
+            (str(title).strip(), description, str(event_type).strip(), location, risk_level, status)
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
 if __name__ == '__main__':
     init_db()
     print("Database initialized successfully.")

@@ -26,7 +26,7 @@ class PersonDetector:
     def __init__(
         self,
         model_path: str = "yolov8x.pt",
-        device: int | str = 0,
+        device: int | str | None = None,
         imgsz: int = 640,
         half: bool = False,
     ) -> None:

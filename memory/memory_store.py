@@ -37,15 +37,30 @@ class MemoryStore:
         return self.active_persons[person_id]
         
     def update_person(self, person_id: int, behaviors: List[str], current_score: int):
-        """Updates counts and timestamps based on current behavior observations."""
+        """Updates counts and timestamps based on current behavior observations.
+        
+        Only increments counters when transitioning FROM not-doing TO doing the behavior,
+        preventing per-frame accumulation.
+        """
         person_memory = self.get_person(person_id)
         
-        if "loitering" in behaviors:
+        # Loitering: only count when transitioning from NOT loitering to loitering
+        is_loitering = "loitering" in behaviors
+        if is_loitering and not person_memory._was_loitering:
             person_memory.loiter_count += 1
-        if "zone_intrusion" in behaviors:
+        person_memory._was_loitering = is_loitering
+        
+        # Zone intrusion: only count when transitioning into zone
+        is_in_zone = "zone_intrusion" in behaviors
+        if is_in_zone and not person_memory._was_in_zone:
             person_memory.zone_intrusions += 1
-        if "weapon_detected" in behaviors:
+        person_memory._was_in_zone = is_in_zone
+        
+        # Weapon: only count when weapon newly detected
+        has_weapon = "weapon_detected" in behaviors
+        if has_weapon and not person_memory._had_weapon:
             person_memory.weapon_events += 1
+        person_memory._had_weapon = has_weapon
             
         person_memory.risk_history.append(current_score)
         
