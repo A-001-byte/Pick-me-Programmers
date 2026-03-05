@@ -78,14 +78,24 @@ def _seed_data(cursor):
 
         if not admin_pass:
             admin_pass = secrets.token_urlsafe(12)
-            print(f"[SEED] No ADMIN_PASSWORD env var set.")
-            print(f"[SEED] Generated admin credentials securely.")
-            print(f"[SEED] Note: Ensure you set ADMIN_USERNAME and ADMIN_PASSWORD in production.")
+            print("[SEED] No ADMIN_PASSWORD env var set.")
+            print("[SEED] Generated admin credentials securely.")
+            print("[SEED] Note: Ensure you set ADMIN_USERNAME and ADMIN_PASSWORD in production.")
+
+        operator_pass = os.environ.get("OPERATOR_PASSWORD")
+        viewer_pass = os.environ.get("VIEWER_PASSWORD")
+
+        if not operator_pass or not viewer_pass:
+            print("[SEED] WARNING: Random fallback passwords generated for operator1 and/or viewer1.")
+            print("[SEED] WARNING: These are unrecoverable placeholders. Set OPERATOR_PASSWORD and VIEWER_PASSWORD to customize them.")
+
+        operator_pass = operator_pass or secrets.token_urlsafe(12)
+        viewer_pass = viewer_pass or secrets.token_urlsafe(12)
 
         users = [
             (admin_user, generate_password_hash(admin_pass), "admin", "Active", "Just now"),
-            ("operator1", generate_password_hash(secrets.token_urlsafe(12)), "security", "Active", "12 min ago"),
-            ("viewer1", generate_password_hash(secrets.token_urlsafe(12)), "viewer", "Active", "1 hour ago"),
+            ("operator1", generate_password_hash(operator_pass), "security", "Active", "12 min ago"),
+            ("viewer1", generate_password_hash(viewer_pass), "viewer", "Active", "1 hour ago"),
         ]
         cursor.executemany(
             'INSERT INTO users (username, password_hash, role, status, last_active) VALUES (?, ?, ?, ?, ?)',

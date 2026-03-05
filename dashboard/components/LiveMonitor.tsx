@@ -24,7 +24,8 @@ interface Stats {
 }
 
 function getRiskColor(risk: string) {
-  switch (risk) {
+  const normalizedRisk = (risk || '').toLowerCase();
+  switch (normalizedRisk) {
     case 'high':
       return 'bg-red-900/30 text-red-400 border-red-800/50';
     case 'medium':
@@ -59,8 +60,8 @@ export default function LiveMonitor() {
       ]);
       setAlerts(Array.isArray(alertsData) ? alertsData : []);
       setStats(statsData);
-    } catch {
-      console.error('Failed to fetch data');
+    } catch (err) {
+      console.error('Failed to fetch data', err);
     } finally {
       setLoading(false);
     }

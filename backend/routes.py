@@ -1,10 +1,13 @@
 import jwt
-import datetime
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import Blueprint, request, jsonify, current_app
 from backend.database import get_db_connection
 from werkzeug.security import check_password_hash
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
+limiter = Limiter(key_func=get_remote_address)
 api_bp = Blueprint('api', __name__)
 
 MAX_LIMIT = 100
@@ -53,6 +56,7 @@ def token_required(roles=None):
 
 
 @api_bp.route('/login', methods=['POST'])
+@limiter.limit("5 per minute")
 def login():
     data = request.get_json()
     if not data or 'username' not in data or 'password' not in data:
@@ -70,7 +74,7 @@ def login():
         token = jwt.encode({
             'username': user['username'],
             'role': user['role'],
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+            'exp': datetime.now(timezone.utc) + timedelta(hours=24)
         }, current_app.config['SECRET_KEY'], algorithm="HS256")
 
         return jsonify({
@@ -119,7 +123,7 @@ def get_stats():
 
     total_alerts = conn.execute('SELECT COUNT(*) FROM alerts').fetchone()[0]
     total_incidents = conn.execute('SELECT COUNT(*) FROM incidents').fetchone()[0]
-    active_incidents = conn.execute('SELECT COUNT(*) FROM incidents WHERE status = ?', ('open',)).fetchone()[0]
+    active_incidents = conn.execute("SELECT COUNT(*) FROM incidents WHERE status NOT IN ('Resolved', 'False Alarm')").fetchone()[0]
 
     # recent high risk alerts
     high_risk_alerts = conn.execute('SELECT COUNT(*) FROM alerts WHERE risk_score >= 0.8').fetchone()[0]

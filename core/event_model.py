@@ -12,7 +12,7 @@ class Event:
     camera_id: str
 
     def to_dict(self) -> Dict[str, Any]:
-        return {f.name: getattr(self, f.name) for f in fields(self)}
+        return asdict(self)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Event':

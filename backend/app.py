@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from flask import Flask
 from flask_cors import CORS
-from backend.routes import api_bp
+from backend.routes import api_bp, limiter
 from backend.database import init_db
 
 
@@ -15,6 +15,7 @@ def create_app():
     init_db()
 
     app = Flask(__name__)
+    limiter.init_app(app)
 
     # --- SECRET_KEY: load from env, fail in production if missing ---
     flask_env = os.environ.get("FLASK_ENV", "development")
