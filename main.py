@@ -12,7 +12,12 @@ Usage:
 
 from __future__ import annotations
 
+import sys
+import os
 import argparse
+
+# Ensure project root is in python path for module imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.pipeline import SurveillancePipeline
 
