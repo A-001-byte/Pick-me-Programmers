@@ -196,6 +196,8 @@ def test_weapon_verifier():
     7b  Three consecutive detections with avg_conf >= 0.6 MUST be confirmed.
     7c  After `decay_after` missed frames the memory resets and the weapon
         is no longer confirmed.
+    7d  Multiple weapon detections in ONE frame must not be counted as multiple
+        frames; only one additional frame should be recorded per update() call.
     """
     verifier = WeaponVerifier(min_frames=3, min_avg_conf=0.6, decay_after=3)
 
@@ -235,6 +237,36 @@ def test_weapon_verifier():
         "WeaponVerifier 7c: Memory reset after decay frames",
         ok_7c,
         f"confirmed_ids = {confirmed}, memory = {verifier.get_memory()}",
+    )
+
+    # --- 7d: multiple weapon detections in ONE frame must not -----
+    #         count as multiple frames (regression guard)          -
+    verifier_d = WeaponVerifier(min_frames=3, min_avg_conf=0.6, decay_after=3)
+
+    # Two weapon boxes, both overlapping the same person bbox
+    weapon_a = (110, 110, 190, 290, 0.80, "Gun")
+    weapon_b = (115, 115, 185, 285, 0.70, "Knife")
+
+    # Single update() call with two detections → must count as exactly 1 frame
+    confirmed = verifier_d.update([weapon_a, weapon_b], tracked)
+    mem_d = verifier_d.get_memory()
+    frames_after_1_call = mem_d.get(1, {}).get("frames", 0)
+    ok_7d_frame_count = frames_after_1_call == 1
+    ok_7d_not_confirmed = 1 not in confirmed
+    check(
+        "WeaponVerifier 7d: Multi-detection in 1 frame counts as 1 frame only",
+        ok_7d_frame_count and ok_7d_not_confirmed,
+        f"frames = {frames_after_1_call} (want 1), confirmed = {confirmed} (want empty)",
+    )
+
+    # Continue with 2 more true successive frames → should now confirm
+    confirmed = verifier_d.update([weapon_a], tracked)  # frame 2
+    confirmed = verifier_d.update([weapon_a], tracked)  # frame 3
+    ok_7d_confirm = 1 in confirmed
+    check(
+        "WeaponVerifier 7d: Confirmation still works after multi-detection fix",
+        ok_7d_confirm,
+        f"confirmed_ids = {confirmed}",
     )
 
 

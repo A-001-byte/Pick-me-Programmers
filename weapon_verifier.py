@@ -116,8 +116,13 @@ class WeaponVerifier:
             p["id"]: p["bbox"] for p in tracked_persons
         }
 
-        # Track which person IDs received a weapon association this frame
+        # Track which person IDs received a weapon association this frame.
         persons_with_weapon: Set[int] = set()
+
+        # Per-frame deduplication: ensure each person's frame count and
+        # confidence_sum are updated at most ONCE per update() call,
+        # even if multiple weapon detections overlap the same person bbox.
+        seen_pids_this_frame: Set[int] = set()
 
         for det in weapon_detections:
             wx1, wy1, wx2, wy2, wconf, _wname = det
@@ -133,7 +138,15 @@ class WeaponVerifier:
 
             persons_with_weapon.add(best_pid)
 
-            # Initialise memory entry if this is the first detected weapon
+            if best_pid in seen_pids_this_frame:
+                # This person was already credited for a weapon detection this
+                # frame — skip to avoid counting multiple detections as multiple
+                # frames and inflating the frame-count / confidence_sum.
+                continue
+
+            seen_pids_this_frame.add(best_pid)
+
+            # Initialise memory entry on the person's first weapon sighting
             if best_pid not in self.weapon_memory:
                 self.weapon_memory[best_pid] = {
                     "frames": 0,
