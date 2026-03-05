@@ -58,6 +58,7 @@ export default function LiveMonitor() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [videoFeedUrl, setVideoFeedUrl] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -82,6 +83,17 @@ export default function LiveMonitor() {
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  // Build video feed URL with auth token (client-side only)
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const baseUrl = process.env.NEXT_PUBLIC_VIDEO_FEED_URL || '/api/video_feed';
+    if (token) {
+      setVideoFeedUrl(`${baseUrl}?token=${encodeURIComponent(token)}`);
+    } else {
+      setVideoFeedUrl(baseUrl);
+    }
+  }, []);
 
   const activeAlerts = alerts.filter((a) => {
     const s = a.status?.toString().toLowerCase().trim();
@@ -219,13 +231,19 @@ export default function LiveMonitor() {
                 ></div>
                 
                 <img
-                  src={process.env.NEXT_PUBLIC_VIDEO_FEED_URL || "/api/video_feed"}
+                  src={videoFeedUrl || ""}
                   alt="Live Camera Feed"
                   className="w-full h-full object-contain"
+                  style={{ display: videoFeedUrl ? 'block' : 'none' }}
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1760866613530-e3e09e013c42?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxidWlsZGluZyUyMGVudHJhbmNlJTIwc2VjdXJpdHl8ZW58MXx8fHwxNzcyNjE4OTIxfDA&ixlib=rb-4.1.0&q=80&w=1080";
                   }}
                 />
+                {!videoFeedUrl && (
+                  <div className="w-full h-full flex items-center justify-center text-[#00e5ff] font-mono text-sm">
+                    Loading video feed...
+                  </div>
+                )}
 
                 {/* Corner Brackets */}
                 <div className="absolute top-4 left-4 w-8 h-8 border-l-2 border-t-2 border-[#00e5ff]/60"></div>

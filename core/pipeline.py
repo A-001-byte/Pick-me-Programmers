@@ -137,6 +137,17 @@ class SurveillancePipeline:
                 f"Cannot open video source: {self.source}"
             )
 
+        # Configure webcam for optimal FPS
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffer for lower latency
+
+        actual_fps = cap.get(cv2.CAP_PROP_FPS)
+        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print(f"[pipeline] Webcam configured: {actual_w}x{actual_h} @ {actual_fps} FPS")
+
         print(f"[pipeline] Streaming from source={self.source}  "
               f"(press 'q' to quit)")
 

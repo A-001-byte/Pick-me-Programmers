@@ -10,7 +10,8 @@ class StreamManager:
     _lock = threading.Lock()
     
     # Default JPEG quality (0-100, higher = better quality, larger size)
-    DEFAULT_JPEG_QUALITY = 80
+    # Reduced to 65 for faster encoding while maintaining acceptable quality
+    DEFAULT_JPEG_QUALITY = 65
 
     def __init__(self):
         # Already initialized by __new__ for the singleton, but we can guard it
@@ -27,11 +28,12 @@ class StreamManager:
         return cls._instance
 
     def update_frame(self, frame: np.ndarray):
-        """Update the latest frame. Submits a copy to avoid mutation issues."""
+        """Update the latest frame. Stores reference directly for speed."""
         if frame is None:
             return
         with self.lock:
-            self.frame = frame.copy()
+            # Store directly instead of copying - pipeline owns the frame lifecycle
+            self.frame = frame
 
     def get_frame_bytes(self):
         """Encode the current frame as JPEG and return bytes."""
