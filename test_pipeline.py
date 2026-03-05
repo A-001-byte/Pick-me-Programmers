@@ -22,19 +22,13 @@ from tracking.sort_tracker import SortTracker
 from tracking.sort_algorithm import KalmanBoxTracker
 from behavior.behavior_analyzer import BehaviorAnalyzer
 
-passed = 0
-failed = 0
 
-
-def report(name, ok, detail=""):
-    global passed, failed
-    tag = "PASS" if ok else "FAIL"
+def check(name, ok, detail=""):
+    """Print result and assert so test failures actually fail the run."""
     suffix = f"  ({detail})" if detail else ""
+    tag = "PASS" if ok else "FAIL"
     print(f"[{tag}] {name}{suffix}")
-    if ok:
-        passed += 1
-    else:
-        failed += 1
+    assert ok, f"{name} FAILED: {detail}"
 
 
 # ---- helpers ---------------------------------------------------------------
@@ -51,7 +45,6 @@ def feed_constant_detection(tracker, bbox, n_frames):
 
 def test_id_persistence():
     """Same detection fed over many frames should keep the same track ID."""
-    # Reset ID counter so the test is deterministic
     KalmanBoxTracker._id_counter = 0
     tracker = SortTracker(max_age=30, min_hits=3, iou_threshold=0.3)
     bbox = [100, 100, 200, 300, 0.9]
@@ -62,9 +55,8 @@ def test_id_persistence():
         for obj in result:
             ids_seen.add(obj["id"])
 
-    # After enough frames, we should have a single consistent ID
     ok = len(ids_seen) == 1
-    report("ID Persistence", ok, f"unique IDs = {ids_seen}")
+    check("ID Persistence", ok, f"unique IDs = {ids_seen}")
 
 
 # ---- Test 2: Speed Calculation ---------------------------------------------
@@ -72,22 +64,8 @@ def test_id_persistence():
 def test_speed_calculation():
     """Moving bbox should produce non-zero speed."""
     KalmanBoxTracker._id_counter = 0
-    tracker = SortTracker(max_age=30, min_hits=1, iou_threshold=0.3)
-    analyzer = BehaviorAnalyzer()
-
-    # Feed an initial position for several frames to establish the track
-    for _ in range(5):
-        tracked = tracker.update([[100, 100, 200, 300, 0.9]])
-
-    # Now move the box significantly
-    tracked = tracker.update([[150, 150, 250, 350, 0.9]])
-    behaviours = analyzer.analyze(tracked)
-
-    # Feed the original position first to build history
-    # Reset analyzer too
-    analyzer2 = BehaviorAnalyzer()
-    KalmanBoxTracker._id_counter = 0
     tracker2 = SortTracker(max_age=30, min_hits=1, iou_threshold=0.3)
+    analyzer2 = BehaviorAnalyzer()
 
     # Position A for a few frames
     for _ in range(4):
@@ -101,9 +79,9 @@ def test_speed_calculation():
     if results:
         speed = results[0]["speed"]
         ok = speed > 0
-        report("Speed Calculation", ok, f"speed = {speed}")
+        check("Speed Calculation", ok, f"speed = {speed}")
     else:
-        report("Speed Calculation", False, "no tracked objects returned")
+        check("Speed Calculation", False, "no tracked objects returned")
 
 
 # ---- Test 3: Loitering Detection -------------------------------------------
@@ -122,9 +100,9 @@ def test_loitering():
 
     if results:
         ok = results[0]["loitering"] is True
-        report("Loitering Detection", ok, f"loitering = {results[0]['loitering']}")
+        check("Loitering Detection", ok, f"loitering = {results[0]['loitering']}")
     else:
-        report("Loitering Detection", False, "no tracked objects returned")
+        check("Loitering Detection", False, "no tracked objects returned")
 
 
 # ---- Test 4: Zone Intrusion -----------------------------------------------
@@ -144,9 +122,9 @@ def test_zone_intrusion():
 
     if results:
         ok = results[0]["zone_intrusion"] is True
-        report("Zone Intrusion", ok, f"zone_intrusion = {results[0]['zone_intrusion']}")
+        check("Zone Intrusion", ok, f"zone_intrusion = {results[0]['zone_intrusion']}")
     else:
-        report("Zone Intrusion", False, "no tracked objects returned")
+        check("Zone Intrusion", False, "no tracked objects returned")
 
 
 # ---- Test 5: Weapon Flag --------------------------------------------------
@@ -170,9 +148,9 @@ def test_weapon_flag():
         tracked = tracker.update([bbox])
         results = analyzer.analyze(tracked)
         ok = results[0]["weapon_detected"] is True
-        report("Weapon Flag", ok, f"weapon_detected = {results[0]['weapon_detected']}")
+        check("Weapon Flag", ok, f"weapon_detected = {results[0]['weapon_detected']}")
     else:
-        report("Weapon Flag", False, "no tracked objects returned")
+        check("Weapon Flag", False, "no tracked objects returned")
 
 
 # ---- Test 6: Crowd Density Alert -------------------------------------------
@@ -200,9 +178,9 @@ def test_crowd_density():
     if results:
         ok = all(r["crowd_density_alert"] for r in results)
         alerts = [r["crowd_density_alert"] for r in results]
-        report("Crowd Density Alert", ok, f"alerts = {alerts}")
+        check("Crowd Density Alert", ok, f"alerts = {alerts}")
     else:
-        report("Crowd Density Alert", False, "no tracked objects returned")
+        check("Crowd Density Alert", False, "no tracked objects returned")
 
 
 # ---- Run all tests ---------------------------------------------------------
@@ -222,7 +200,7 @@ if __name__ == "__main__":
 
     print()
     print("-" * 60)
-    print(f"  Results:  {passed} passed,  {failed} failed")
+    print("  All tests passed!")
     print("-" * 60)
 
-    sys.exit(0 if failed == 0 else 1)
+    sys.exit(0)
