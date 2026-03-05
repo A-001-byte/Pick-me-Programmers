@@ -1,2 +1,7 @@
-# No external dependencies are currently required for this basic implementation.
-# In a production environment, you might include packages for database, message queues (like Celery/Kafka), or web frameworks.
+numpy
+opencv-python
+scipy
+filterpy
+lap
+scikit-image
+pandas
