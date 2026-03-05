@@ -1,0 +1,21 @@
+{
+    "thresholds": [
+        {
+            "max": 19,
+            "level": "NORMAL"
+        },
+        {
+            "max": 39,
+            "level": "LOW"
+        },
+        {
+            "max": 69,
+            "level": "SUSPICIOUS"
+        },
+        {
+            "max": 99,
+            "level": "HIGH_RISK"
+        }
+    ],
+    "default_level": "CRITICAL"
+}

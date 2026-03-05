@@ -1,0 +1,4 @@
+{
+    "decay_rate_per_minute": 5,
+    "memory_expiry_minutes": 10
+}
