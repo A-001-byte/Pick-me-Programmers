@@ -27,6 +27,7 @@ import numpy as np
 from detection.person_detector import PersonDetector
 from detection.weapon_detector import WeaponDetector
 from weapon_verifier import WeaponVerifier
+from core.stream_manager import stream_manager
 from behavior.behavior_analyzer import BehaviorAnalyzer
 from engine.risk_engine import RiskEngine
 
@@ -36,11 +37,14 @@ COLOR_PERSON  = (0, 255, 0)       # green  — normal person
 COLOR_ARMED   = (0, 0, 255)       # red    — armed person + weapon box
 COLOR_WEAPON  = (0, 0, 255)       # red    — weapon bounding box
 COLOR_FPS     = (0, 255, 255)     # yellow
+COLOR_MEDIUM  = (0, 165, 255)     # orange — medium risk
+COLOR_HIGH    = (0, 0, 255)       # red    — high/critical risk
 FONT          = cv2.FONT_HERSHEY_SIMPLEX
 THICKNESS     = 2
 
 # Minimum weapon confidence to classify a person as armed
-ARMED_CONF_THRESHOLD = 0.45
+# Raised from 0.45 to 0.75 to reduce false positives
+ARMED_CONF_THRESHOLD = 0.75
 
 # How many frames to keep showing "Armed Person" after the last detection
 WEAPON_PERSIST_FRAMES = 5
@@ -56,9 +60,13 @@ class SurveillancePipeline:
         weapon_conf: float = 0.3,
         armed_threshold: float = ARMED_CONF_THRESHOLD,
         persist_frames: int = WEAPON_PERSIST_FRAMES,
-        person_model: str = "yolov8x.pt",
+        person_model: str = "models/yolov8m.pt",
         weapon_model: Optional[str] = None,
-        device: int | str = 0,
+        device: int | str | None = None,
+        headless: bool = False,
+        weapon_skip: int = 5,  # Run weapon detection every N frames
+        risk_skip: int = 3,    # Run risk engine every N frames (reduces logging/CPU)
+        imgsz: int = 416,      # Smaller size for faster processing (was 640)
     ) -> None:
         self.source = source
         self.person_conf = person_conf
@@ -66,15 +74,20 @@ class SurveillancePipeline:
         self.armed_threshold = armed_threshold
         self.persist_frames = persist_frames
         self.device = device
+        self.headless = headless
+        self.weapon_skip = weapon_skip
+        self.risk_skip = risk_skip
+        self.imgsz = imgsz
+        self._frame_count = 0
 
         # Initialise detectors
-        print("[pipeline] Loading person detector (ByteTrack) …")
+        print(f"[pipeline] Loading person detector (ByteTrack) at {imgsz}px …")
         self.person_det = PersonDetector(
-            model_path=person_model, device=device,
+            model_path=person_model, device=device, imgsz=imgsz,
         )
 
-        print("[pipeline] Loading weapon detector …")
-        weapon_kwargs = {"device": device}
+        print(f"[pipeline] Loading weapon detector at {imgsz}px …")
+        weapon_kwargs = {"device": device, "imgsz": imgsz}
         if weapon_model is not None:
             weapon_kwargs["model_path"] = weapon_model
         self.weapon_det = WeaponDetector(**weapon_kwargs)
@@ -89,9 +102,11 @@ class SurveillancePipeline:
         )
 
         # ── BehaviorAnalyzer: per-person behaviour signals ─────────────────
+        print("[pipeline] Initializing BehaviorAnalyzer …")
         self.behavior_analyzer = BehaviorAnalyzer()
 
         # ── RiskEngine: threat scoring and alert dispatch ──────────────────
+        print("[pipeline] Initializing RiskEngine …")
         self.risk_engine = RiskEngine()
 
         # FPS tracking (rolling window of last 30 frames)
@@ -101,6 +116,9 @@ class SurveillancePipeline:
         # NOTE: used only for the *visual* overlay; behavioural flagging is
         # handled by WeaponVerifier + BehaviorAnalyzer (see run loop).
         self._weapon_buffer: dict[int, dict] = {}
+
+        # Store risk decisions for drawing
+        self._risk_decisions: dict[int, dict] = {}
 
     # ── main loop ────────────────────────────────────────────────────
 
@@ -125,9 +143,11 @@ class SurveillancePipeline:
                     break
 
                 # ── 1. Detect + track persons (ByteTrack) ────────────
+                t_p_start = time.perf_counter()
                 tracked = self.person_det.track(
                     frame, conf=self.person_conf,
                 )
+                t_p_end = time.perf_counter()
 
                 # ── 2. Per-person weapon detection ───────────────────
                 active_ids: set[int] = set()
@@ -146,32 +166,40 @@ class SurveillancePipeline:
                         "bbox": [px1, py1, px2, py2],
                     })
 
-                    weapons = self.weapon_det.detect_in_region(
-                        frame,
-                        (px1, py1, px2, py2),
-                        conf=self.weapon_conf,
-                    )
-                    all_weapon_dets.extend(weapons)
+                    # Only run weapon detection every weapon_skip frames
+                    should_detect = (self._frame_count % self.weapon_skip == 0)
+                    
+                    if should_detect:
+                        weapons = self.weapon_det.detect_in_region(
+                            frame,
+                            (px1, py1, px2, py2),
+                            conf=self.weapon_conf,
+                        )
+                        all_weapon_dets.extend(weapons)
 
-                    # ── Visual display buffer (TTL-based) ───────────────
-                    # Keep only weapons above the armed threshold for display.
-                    high_conf = [
-                        w for w in weapons if w[4] >= self.armed_threshold
-                    ]
-                    if high_conf:
-                        self._weapon_buffer[tid] = {
-                            "weapons": high_conf,
-                            "ttl": self.persist_frames,
-                        }
-                    elif tid in self._weapon_buffer:
-                        self._weapon_buffer[tid]["ttl"] -= 1
-                        if self._weapon_buffer[tid]["ttl"] <= 0:
-                            del self._weapon_buffer[tid]
+                        # ── Visual display buffer (TTL-based) ───────────────
+                        # Keep only weapons above the armed threshold for display.
+                        high_conf = [
+                            w for w in weapons if w[4] >= self.armed_threshold
+                        ]
+                        if high_conf:
+                            self._weapon_buffer[tid] = {
+                                "weapons": high_conf,
+                                "ttl": self.persist_frames,
+                            }
+                        elif tid in self._weapon_buffer:
+                            self._weapon_buffer[tid]["ttl"] -= 1
+                            if self._weapon_buffer[tid]["ttl"] <= 0:
+                                del self._weapon_buffer[tid]
+                    else:
+                        # On skipped frames, we don't clear or add to all_weapon_dets,
+                        # but we still need to know what's in the visual buffer.
+                        pass
 
                     buffered = self._weapon_buffer.get(tid)
                     is_armed_display = buffered is not None
                     shown_weapons = buffered["weapons"] if buffered else []
-
+                    
                     person_states.append({
                         "bbox": (px1, py1, px2, py2),
                         "conf": pconf,
@@ -192,9 +220,14 @@ class SurveillancePipeline:
                 # Associates weapon bboxes to person bboxes via IoU and
                 # accumulates frame counts + confidence scores.  A weapon is
                 # confirmed only when frames >= 3 AND avg_conf >= 0.6.
-                confirmed_armed_ids = self.weapon_verifier.update(
-                    all_weapon_dets, tracked_for_analyzer
-                )
+                # Note: only update if we actually ran detection this frame.
+                if self._frame_count % self.weapon_skip == 0:
+                    confirmed_armed_ids = self.weapon_verifier.update(
+                        all_weapon_dets, tracked_for_analyzer
+                    )
+                else:
+                    # On skipped frames, get current confirmed IDs from verifier
+                    confirmed_armed_ids = self.weapon_verifier.get_confirmed_ids()
 
                 # ── 4. Propagate confirmed weapon flags to BehaviorAnalyzer
                 for p in tracked_for_analyzer:
@@ -209,8 +242,23 @@ class SurveillancePipeline:
                 )
 
                 # ── 6. Risk engine — threat scoring + alert dispatch ─
-                if behavior_results:
-                    self.risk_engine.process_frame(behavior_results)
+                # Process through risk engine (only every risk_skip frames to reduce CPU/logging)
+                should_process_risk = (self._frame_count % self.risk_skip == 0)
+                if behavior_results and should_process_risk:
+                    risk_decisions = self.risk_engine.process_frame(behavior_results)
+                    # Store decisions for drawing
+                    for rd in risk_decisions:
+                        self._risk_decisions[rd["person_id"]] = rd
+                
+                # Update person_states with risk info
+                for ps in person_states:
+                    tid = ps["track_id"]
+                    if tid in self._risk_decisions:
+                        ps["risk_score"] = self._risk_decisions[tid].get("risk_score", 0)
+                        ps["threat_level"] = self._risk_decisions[tid].get("threat_level", "low")
+                    else:
+                        ps["risk_score"] = 0
+                        ps["threat_level"] = "low"
 
                 # ── 7. Print confirmed weapon detections ─────────────
                 for ps in person_states:
@@ -238,10 +286,15 @@ class SurveillancePipeline:
                     2,
                 )
 
-                # ── 10. Display ──────────────────────────────────────
-                cv2.imshow("ThreatSense-AI", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
+                # ── 10. Push to Stream Manager ────────────────────────
+                stream_manager.update_frame(frame)
+                self._frame_count += 1
+
+                # ── 11. Display ──────────────────────────────────────
+                if not self.headless:
+                    cv2.imshow("ThreatSense-AI", frame)
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                        break
 
         finally:
             cap.release()
@@ -256,21 +309,36 @@ class SurveillancePipeline:
         person_states: list[dict],
     ) -> None:
         """
-        Draw bounding boxes with track-ID labels:
-          • Normal person  → green box, "Person ID X"
-          • Armed person   → red box,   "Armed Person ID X"
-          • Weapon         → red box with weapon class name
+        Draw bounding boxes with track-ID labels and risk scores:
+          • Low risk      → green box
+          • Medium risk   → orange box
+          • High risk     → red box
+          • Armed person  → red box with "Armed" prefix
+          • Weapon        → red box with weapon class name
         """
         for ps in person_states:
             x1, y1, x2, y2 = ps["bbox"]
             tid = ps["track_id"]
+            threat_level = ps.get("threat_level", "low").lower()
+            risk_score = ps.get("risk_score", 0)
 
-            if ps["armed"]:
-                color = COLOR_ARMED
-                label = f"Armed Person ID {tid}"
+            # Determine color based on threat level
+            if ps["armed"] or threat_level in ("high", "critical"):
+                color = COLOR_HIGH
+            elif threat_level == "medium":
+                color = COLOR_MEDIUM
             else:
                 color = COLOR_PERSON
-                label = f"Person ID {tid}"
+
+            # Build label
+            if ps["armed"]:
+                label = f"Armed ID {tid}"
+            else:
+                label = f"ID {tid}"
+            
+            # Add risk score to label if available
+            if risk_score > 0:
+                label += f" [{risk_score}]"
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, THICKNESS)
             cv2.putText(

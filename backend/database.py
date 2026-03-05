@@ -138,6 +138,78 @@ def _seed_data(cursor):
         )
 
 
+def add_alert(person_id, event_type, risk_score, risk_level, camera_id="CAM-01", location="Main Entrance", status="Active"):
+    """
+    Persists a new alert to the database.
+    
+    Parameters
+    ----------
+    person_id : str
+        Unique identifier for the detected person.
+    event_type : str
+        Type of event detected (e.g., "Suspicious Behavior", "Weapon Detected").
+    risk_score : float
+        Computed risk score (0.0 to 1.0).
+    risk_level : str
+        Risk level classification ("low", "medium", "high", "critical").
+    camera_id : str
+        Camera identifier (default "CAM-01").
+    location : str
+        Location description (default "Main Entrance").
+    status : str
+        Alert status (default "Active").
+    
+    Returns
+    -------
+    int
+        The ID of the newly inserted alert.
+    """
+    with contextlib.closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            '''INSERT INTO alerts (person_id, event_type, risk_score, risk_level, camera_id, location, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?)''',
+            (person_id, event_type, risk_score, risk_level, camera_id, location, status)
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
+def add_incident(title, description, event_type, location="Main Entrance", risk_level="low", status="open"):
+    """
+    Persists a new incident to the database.
+    
+    Parameters
+    ----------
+    title : str
+        Short title for the incident.
+    description : str
+        Detailed description of the incident.
+    event_type : str
+        Type of event (e.g., "Suspicious Behavior", "Unauthorized Access").
+    location : str
+        Location description (default "Main Entrance").
+    risk_level : str
+        Risk level classification ("low", "medium", "high", "critical").
+    status : str
+        Incident status (default "open").
+    
+    Returns
+    -------
+    int
+        The ID of the newly inserted incident.
+    """
+    with contextlib.closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            '''INSERT INTO incidents (title, description, event_type, location, risk_level, status)
+               VALUES (?, ?, ?, ?, ?, ?)''',
+            (title, description, event_type, location, risk_level, status)
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
 if __name__ == '__main__':
     init_db()
     print("Database initialized successfully.")

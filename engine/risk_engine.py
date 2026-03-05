@@ -100,14 +100,16 @@ class RiskEngine:
         # 8. Update memory with the final computed score
         self.memory_store.update_person(person_id, active_behaviors, total_score)
         
-        # 9. Log the event
-        self.audit_logger.log_decision(
-            person_id=person_id,
-            behaviors=active_behaviors,
-            risk_score=total_score,
-            threat_level=threat_level,
-            reasons=all_reasons
-        )
+        # 9. Log the event - ONLY if there's something significant to log
+        # Skip logging for NORMAL threat level with no behaviors (reduces log spam)
+        if active_behaviors or threat_level != "NORMAL":
+            self.audit_logger.log_decision(
+                person_id=person_id,
+                behaviors=active_behaviors,
+                risk_score=total_score,
+                threat_level=threat_level,
+                reasons=all_reasons
+            )
         
         # 10. Formulate result
         result = {

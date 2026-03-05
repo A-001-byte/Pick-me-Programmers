@@ -1,25 +1,55 @@
+"use client";
+
+import { useState, useEffect } from 'react';
+
 export function Header() {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('en-US', { 
+      hour12: false, 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit' 
+    });
+  };
+
   return (
-    <div className="bg-zinc-950 border-b border-zinc-800 px-6 py-3">
+    <div className="bg-black/40 backdrop-blur-md border-b border-[#00e5ff]/20 px-6 py-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 text-xs">
-            <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-            <span className="text-zinc-400 font-mono">System Online</span>
+            <div className="w-2 h-2 bg-[#00e5ff] rounded-full shadow-[0_0_8px_#00e5ff] animate-pulse" />
+            <span className="text-[#00e5ff]/70 font-mono text-[10px] uppercase tracking-widest">SYSTEM ONLINE</span>
           </div>
-          <div className="h-3 w-px bg-zinc-700" />
+          <div className="h-4 w-px bg-[#00e5ff]/20" />
           <div className="flex items-center gap-2 text-xs">
-            <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-            <span className="text-zinc-400 font-mono">Camera Connected</span>
+            <div className="w-2 h-2 bg-[#22c55e] rounded-full shadow-[0_0_8px_#22c55e]" />
+            <span className="text-[#22c55e]/70 font-mono text-[10px] uppercase tracking-widest">📹 CAMERA ACTIVE</span>
           </div>
-          <div className="h-3 w-px bg-zinc-700" />
+          <div className="h-4 w-px bg-[#00e5ff]/20" />
           <div className="flex items-center gap-2 text-xs">
-            <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-            <span className="text-zinc-400 font-mono">Detection Running</span>
+            <div className="w-2 h-2 bg-[#22c55e] rounded-full shadow-[0_0_8px_#22c55e] animate-pulse" />
+            <span className="text-[#22c55e]/70 font-mono text-[10px] uppercase tracking-widest">🧠 AI DETECTING</span>
           </div>
         </div>
-        <div className="text-xs text-zinc-500 font-mono">
-          {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}
+        <div className="flex items-center gap-2 font-mono">
+          <span className="text-[#00e5ff]/50 text-xs">//</span>
+          <span className="text-[#00e5ff] text-xs tracking-wider">{formatDate(currentTime)}</span>
+          <span className="text-[#00e5ff]/50 text-xs">::</span>
+          <span className="text-[#00e5ff] text-xs tracking-wider">{formatTime(currentTime)}</span>
         </div>
       </div>
     </div>

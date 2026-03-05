@@ -8,11 +8,44 @@ from flask import Flask
 from flask_cors import CORS
 from backend.routes import api_bp, limiter
 from backend.database import init_db
+from core.pipeline import SurveillancePipeline
+import threading
 
 
 def create_app():
     # Initialize the database on startup
     init_db()
+
+    # Start the AI pipeline in a background thread
+    def run_pipeline():
+        person_model = "models/yolov8m_fixed.pt"
+        weapon_model = "models/weapon_detector_fixed.pt"
+        
+        # Check if models exist and are valid files (directories will fail in YOLO)
+        if not os.path.isfile(person_model):
+            print(f"[backend] Warning: {person_model} not found or is a directory. Falling back to yolo26n.pt")
+            person_model = "yolo26n.pt"
+        
+        if not os.path.isfile(weapon_model):
+            print(f"[backend] Warning: {weapon_model} not found or is a directory. Weapon detection may be disabled or use default.")
+            # WeaponDetector will use its internal default (models/weapon_detector.pt) 
+            # so we let it try, or pass None to use internal default.
+            weapon_model = None
+
+        print(f"[backend] Starting AI Surveillance Pipeline in background... (Person: {person_model}, Weapon: {weapon_model})")
+        try:
+            pipeline = SurveillancePipeline(
+                source=0, # Default webcam
+                person_model=person_model,
+                weapon_model=weapon_model,
+                headless=True
+            )
+            pipeline.run()
+        except Exception as e:
+            print(f"[backend] AI Pipeline error: {e}")
+
+    thread = threading.Thread(target=run_pipeline, daemon=True)
+    thread.start()
 
     app = Flask(__name__)
     limiter.init_app(app)
