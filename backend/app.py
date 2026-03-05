@@ -18,21 +18,24 @@ def create_app():
 
     # Start the AI pipeline in a background thread
     def run_pipeline():
-        person_model = "models/yolov8m_fixed.pt"
-        weapon_model = "models/weapon_detector_fixed.pt"
+        # Resolve project root (one level up from this file)
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         
-        # Check if models exist and are valid files (directories will fail in YOLO)
+        person_model = os.path.join(root_dir, "models", "yolov8m_fixed.pt")
+        weapon_model = os.path.join(root_dir, "models", "weapon_detector_fixed.pt")
+        
+        # Check if models exist and are valid files
         if not os.path.isfile(person_model):
-            print(f"[backend] Warning: {person_model} not found or is a directory. Falling back to models/yolov8n.pt")
-            person_model = "models/yolov8n.pt"
+            print(f"[backend] Warning: {person_model} not found. Falling back to backend/models/yolov8n.pt")
+            person_model = os.path.join(os.path.dirname(__file__), "models", "yolov8n.pt")
         
         if not os.path.isfile(weapon_model):
-            print(f"[backend] Warning: {weapon_model} not found or is a directory. Weapon detection may be disabled or use default.")
-            # WeaponDetector will use its internal default (models/weapon_detector.pt) 
-            # so we let it try, or pass None to use internal default.
+            print(f"[backend] Warning: {weapon_model} not found. Weapon detection may be disabled or use default.")
             weapon_model = None
 
-        print(f"[backend] Starting AI Surveillance Pipeline in background... (Person: {person_model}, Weapon: {weapon_model})")
+        print(f"[backend] Starting AI Surveillance Pipeline in background...")
+        print(f"        > Person Model: {person_model}")
+        print(f"        > Weapon Model: {weapon_model}")
         try:
             pipeline = SurveillancePipeline(
                 source=0, # Default webcam
