@@ -1,34 +1,90 @@
-from detection import PersonDetector, WeaponDetector
-from tracking import MultiObjectTracker
-from behavior import BehaviorAnalyzer
-from risk_engine import ThreatScorer
-from alerts import AlertGenerator
+"""
+main.py
+───────
+Entry point for the ThreatSense-AI real-time surveillance system.
 
-def main():
-    """
-    Main pipeline for ThreatSense-AI.
-    Continuously processes CCTV video streams.
-    """
-    person_detector = PersonDetector()
-    weapon_detector = WeaponDetector()
-    tracker = MultiObjectTracker()
-    behavior_analyzer = BehaviorAnalyzer()
-    scorer = ThreatScorer()
-    alerter = AlertGenerator()
-    
-    print("ThreatSense-AI initialized.")
-    print("Starting video stream analysis...")
-    
-    # Placeholder for video stream processing loop
-    # while True:
-    #     frame = get_next_frame()
-    #     persons = person_detector.detect(frame)
-    #     weapons = weapon_detector.detect(frame)
-    #     tracks = tracker.track(persons, frame)
-    #     behaviors = behavior_analyzer.analyze(tracks)
-    #     threat_score = scorer.score(persons, weapons, behaviors)
-    #     if threat_score > 0.8:
-    #         alerter.generate(threat_score, {"timestamp": "now"})
+Usage:
+    python main.py                           # webcam (default)
+    python main.py --source rtsp://...       # RTSP stream
+    python main.py --source video.mp4        # video file
+    python main.py --person-conf 0.5 --weapon-conf 0.4
+"""
+
+from __future__ import annotations
+
+import argparse
+
+from core.pipeline import SurveillancePipeline
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="ThreatSense-AI — real-time weapon surveillance",
+    )
+    p.add_argument(
+        "--source",
+        default="0",
+        help="Video source: webcam index (0), file path, or RTSP URL "
+             "(default: 0)",
+    )
+    p.add_argument(
+        "--person-conf",
+        type=float,
+        default=0.4,
+        help="Person detection confidence threshold (default: 0.4)",
+    )
+    p.add_argument(
+        "--weapon-conf",
+        type=float,
+        default=0.3,
+        help="Weapon detection confidence threshold (default: 0.3)",
+    )
+    p.add_argument(
+        "--person-model",
+        default="yolov8x.pt",
+        help="Path to the person detector model (default: yolov8x.pt)",
+    )
+    p.add_argument(
+        "--weapon-model",
+        default=None,
+        help="Path to the weapon detector model "
+             "(default: models/weapon_detector.pt)",
+    )
+    p.add_argument(
+        "--armed-threshold",
+        type=float,
+        default=0.65,
+        help="Min weapon confidence to label person as armed (default: 0.65)",
+    )
+    p.add_argument(
+        "--device",
+        default="0",
+        help="Inference device: GPU index or 'cpu' (default: 0)",
+    )
+    return p.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
+    # Allow bare integer for webcam index
+    source = int(args.source) if args.source.isdigit() else args.source
+
+    pipeline = SurveillancePipeline(
+        source=source,
+        person_conf=args.person_conf,
+        weapon_conf=args.weapon_conf,
+        armed_threshold=args.armed_threshold,
+        person_model=args.person_model,
+        weapon_model=args.weapon_model,
+        device=int(args.device) if args.device.isdigit() else args.device,
+    )
+
+    print("╔══════════════════════════════════════╗")
+    print("║     ThreatSense-AI  •  Surveillance  ║")
+    print("╚══════════════════════════════════════╝")
+    pipeline.run()
+
 
 if __name__ == "__main__":
     main()
