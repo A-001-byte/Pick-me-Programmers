@@ -18,18 +18,23 @@ def create_app():
 
     # --- Model Validation (Fail Fast) ---
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    
+    # Primary models (in root/models)
     person_model = os.path.join(root_dir, "models", "yolov8m_fixed.pt")
     weapon_model = os.path.join(root_dir, "models", "weapon_detector_fixed.pt")
+    # Fallback model (in root)
+    fallback_model = os.path.join(root_dir, "yolo26n.pt")
 
     if not os.path.isfile(person_model):
-        fallback_model = os.path.join(os.path.dirname(__file__), "models", "yolov8n.pt")
-        print(f"[backend] Warning: {person_model} not found. Falling back to {fallback_model}")
+        print(f"[backend] Warning: Primary person model not found at {person_model}")
+        print(f"        Attempting fallback to {fallback_model}...")
         
         if not os.path.isfile(fallback_model):
             error_msg = (
-                f"Critical: Fallback person model not found at {fallback_model}\n"
-                f"Tried: 1. {person_model}\n"
-                f"       2. {fallback_model}"
+                f"Critical Error: No person detection models found!\n"
+                f"  Attempted Primary: {person_model}\n"
+                f"  Attempted Fallback: {fallback_model}\n"
+                "Please ensure at least the fallback model 'yolo26n.pt' is present in the root directory."
             )
             print(f"[ERROR] {error_msg}")
             raise RuntimeError(error_msg)
@@ -37,7 +42,8 @@ def create_app():
         person_model = fallback_model
     
     if not os.path.isfile(weapon_model):
-        print(f"[backend] Warning: {weapon_model} not found. Weapon detection may be disabled or use default.")
+        print(f"[backend] Warning: Weapon model not found at {weapon_model}")
+        print("        Weapon detection will use internal defaults or be disabled.")
         weapon_model = None
 
     # Start the AI pipeline in a background thread
