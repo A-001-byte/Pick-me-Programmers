@@ -79,10 +79,8 @@ def _seed_data(cursor):
         if not admin_pass:
             admin_pass = secrets.token_urlsafe(12)
             print(f"[SEED] No ADMIN_PASSWORD env var set.")
-            print(f"[SEED] Generated admin credentials:")
-            print(f"       Username: {admin_user}")
-            print(f"       Password: {admin_pass}")
-            print(f"[SEED] Set ADMIN_USERNAME / ADMIN_PASSWORD env vars to customise.")
+            print(f"[SEED] Generated admin credentials securely.")
+            print(f"[SEED] Note: Ensure you set ADMIN_USERNAME and ADMIN_PASSWORD in production.")
 
         users = [
             (admin_user, generate_password_hash(admin_pass), "admin", "Active", "Just now"),

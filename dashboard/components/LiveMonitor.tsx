@@ -46,7 +46,7 @@ function formatTime(timestamp: string) {
 }
 
 export default function LiveMonitor() {
-  const [alertBanner, setAlertBanner] = useState(true);
+  const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(new Set());
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,14 +73,17 @@ export default function LiveMonitor() {
     return () => clearInterval(interval);
   }, []);
 
-  const activeAlerts = alerts.filter(
-    (a) => a.status === 'Active' || a.status === 'Under Review'
-  );
+  const activeAlerts = alerts.filter((a) => {
+    const s = a.status?.toString().toLowerCase().trim();
+    return s === 'active' || s === 'under review';
+  });
+
+  const showBanner = activeAlerts.some((a) => !dismissedAlertIds.has(a.id));
 
   return (
     <div className="flex-1 bg-black overflow-auto">
       <div className="p-6">
-        {alertBanner && activeAlerts.length > 0 && (
+        {showBanner && activeAlerts.length > 0 && (
           <div className="mb-4 bg-red-950/40 border border-red-900/50 p-3">
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
@@ -93,7 +96,9 @@ export default function LiveMonitor() {
                 </p>
               </div>
               <button
-                onClick={() => setAlertBanner(false)}
+                onClick={() => {
+                  setDismissedAlertIds(prev => new Set(prev).add(activeAlerts[0].id));
+                }}
                 className="text-red-500 hover:text-red-400 text-xs px-2 py-1 border border-red-900/50 hover:border-red-800"
               >
                 Dismiss

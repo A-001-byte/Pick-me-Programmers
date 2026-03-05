@@ -16,6 +16,16 @@ class Event:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Event':
+        from dataclasses import MISSING
+        required_fields = [
+            f.name for f in fields(cls) 
+            if f.default is MISSING and f.default_factory is MISSING
+        ]
+        
+        missing = [f for f in required_fields if f not in data]
+        if missing:
+            raise ValueError(f"Missing required fields: {', '.join(missing)}")
+            
         valid_names = {f.name for f in fields(cls)}
         filtered = {k: v for k, v in data.items() if k in valid_names}
         return cls(**filtered)

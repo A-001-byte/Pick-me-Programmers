@@ -99,12 +99,14 @@ def get_alerts():
 @token_required(roles=['admin', 'security', 'operator', 'viewer'])
 def get_incidents():
     status = request.args.get('status')
+    limit = request.args.get('limit', 100, type=int)
+    limit = max(1, min(limit, 1000))
 
     conn = get_db_connection()
     if status:
-        incidents = conn.execute('SELECT * FROM incidents WHERE status = ? ORDER BY created_at DESC', (status,)).fetchall()
+        incidents = conn.execute('SELECT * FROM incidents WHERE status = ? ORDER BY created_at DESC LIMIT ?', (status, limit)).fetchall()
     else:
-        incidents = conn.execute('SELECT * FROM incidents ORDER BY created_at DESC').fetchall()
+        incidents = conn.execute('SELECT * FROM incidents ORDER BY created_at DESC LIMIT ?', (limit,)).fetchall()
     conn.close()
 
     return jsonify([dict(row) for row in incidents]), 200

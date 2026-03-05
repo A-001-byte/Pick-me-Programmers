@@ -74,8 +74,10 @@ export default function UserManagement() {
               <h2 className="text-white text-sm font-medium">User Accounts</h2>
               <button
                 type="button"
-                onClick={() => console.warn("Add User not implemented")}
-                className="flex items-center bg-red-900/50 hover:bg-red-900/70 text-red-400 border border-red-900/50 text-xs px-3 h-8 rounded-md transition-colors font-medium"
+                disabled
+                aria-disabled="true"
+                title="Coming soon"
+                className="flex items-center bg-red-900/50 text-red-400/50 border border-red-900/50 text-xs px-3 h-8 rounded-md transition-colors font-medium opacity-50 cursor-not-allowed"
               >
                 <UserPlus className="w-3 h-3 mr-1.5" />
                 Add User
@@ -137,9 +139,9 @@ export default function UserManagement() {
                         </td>
                         <td className="p-3">
                           <div
-                            className={`inline-block px-2 py-0.5 border rounded text-xs font-mono ${user.status === 'Active'
-                              ? 'bg-green-950/30 text-green-500 border-green-900/50'
-                              : 'bg-zinc-800 text-zinc-500 border-zinc-700'
+                            className={`inline-block px-2 py-0.5 border rounded text-xs font-mono ${(user.status || '').toString().trim().toLowerCase() === 'active'
+                                ? 'bg-green-950/30 text-green-500 border-green-900/50'
+                                : 'bg-zinc-800 text-zinc-500 border-zinc-700'
                               }`}
                           >
                             {user.status}
@@ -152,16 +154,20 @@ export default function UserManagement() {
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
-                              onClick={() => console.warn("Edit User not implemented")}
-                              className="flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 h-7 w-7 rounded transition-colors"
+                              disabled
+                              aria-disabled="true"
+                              title="Coming soon"
+                              className="flex items-center justify-center text-zinc-500 h-7 w-7 rounded transition-colors opacity-50 cursor-not-allowed"
                               aria-label={`Edit ${user.username}`}
                             >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
                             <button
                               type="button"
-                              onClick={() => console.warn("Delete User not implemented")}
-                              className="flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-red-950/30 h-7 w-7 rounded transition-colors"
+                              disabled
+                              aria-disabled="true"
+                              title="Coming soon"
+                              className="flex items-center justify-center text-zinc-500 h-7 w-7 rounded transition-colors opacity-50 cursor-not-allowed"
                               aria-label={`Delete ${user.username}`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
