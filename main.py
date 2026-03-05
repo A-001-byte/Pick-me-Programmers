@@ -1,82 +1,95 @@
+"""
+main.py
+───────
+Entry point for the ThreatSense-AI real-time surveillance system.
+
+Usage:
+    python main.py                           # webcam (default)
+    python main.py --source rtsp://...       # RTSP stream
+    python main.py --source video.mp4        # video file
+    python main.py --person-conf 0.5 --weapon-conf 0.4
+"""
+
+from __future__ import annotations
+
 import sys
 import os
+import argparse
 
 # Ensure project root is in python path for module imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import cv2
 from core.pipeline import SurveillancePipeline
 
-def main():
-    """
-    Main pipeline for Surveillance System.
-    Continuously processes CCTV video streams.
-    """
-    print("Initializing Surveillance System...")
-    pipeline = SurveillancePipeline()
-    
-    # Capture video from webcam using OpenCV
-    cap = cv2.VideoCapture(0)
-    
-    if not cap.isOpened():
-        print("Error: Could not open webcam.")
-        return
 
-    print("Starting video stream analysis. Press 'q' to quit.")
-    
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("Error: Failed to capture image.")
-            break
-        
-        # Process each frame through pipeline
-        try:
-            alerts = pipeline.process_frame(frame)
-        except Exception as e:
-            # Catching exceptions if modules are not fully implemented yet
-            print(f"Pipeline error: {e}")
-            alerts = []
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="ThreatSense-AI — real-time weapon surveillance",
+    )
+    p.add_argument(
+        "--source",
+        default="0",
+        help="Video source: webcam index (0), file path, or RTSP URL "
+             "(default: 0)",
+    )
+    p.add_argument(
+        "--person-conf",
+        type=float,
+        default=0.4,
+        help="Person detection confidence threshold (default: 0.4)",
+    )
+    p.add_argument(
+        "--weapon-conf",
+        type=float,
+        default=0.3,
+        help="Weapon detection confidence threshold (default: 0.3)",
+    )
+    p.add_argument(
+        "--person-model",
+        default="yolov8x.pt",
+        help="Path to the person detector model (default: yolov8x.pt)",
+    )
+    p.add_argument(
+        "--weapon-model",
+        default=None,
+        help="Path to the weapon detector model "
+             "(default: models/weapon_detector.pt)",
+    )
+    p.add_argument(
+        "--armed-threshold",
+        type=float,
+        default=0.65,
+        help="Min weapon confidence to label person as armed (default: 0.65)",
+    )
+    p.add_argument(
+        "--device",
+        default="0",
+        help="Inference device: GPU index or 'cpu' (default: 0)",
+    )
+    return p.parse_args()
 
-        # Draw bounding boxes and alert information
-        if alerts:
-            for alert in alerts:
-                # Handle both Event object and dict for flexibility
-                if hasattr(alert, "to_dict"):
-                    alert_data = alert.to_dict()
-                elif isinstance(alert, dict):
-                    alert_data = alert
-                else:
-                    continue
-                    
-                person_id = alert_data.get("person_id", "Unknown")
-                bbox = alert_data.get("bbox", [])
-                event_type = alert_data.get("event_type", "Unknown")
-                risk_score = alert_data.get("risk_score", 0.0)
-                
-                # Show person ID, risk score, and event type
-                text = f"ID: {person_id} | {event_type} | Risk: {risk_score:.2f}"
-                
-                # Bbox expected in format [x_min, y_min, x_max, y_max]
-                if bbox and len(bbox) >= 4:
-                    x1, y1, x2, y2 = map(int, bbox[:4])
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                    cv2.putText(frame, text, (x1, max(y1 - 10, 10)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                else:
-                    # Generic display if no valid bbox is returned
-                    cv2.putText(frame, text, (10, 30),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
-        # Display video feed
-        cv2.imshow('Surveillance Feed', frame)
-        
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+def main() -> None:
+    args = parse_args()
 
-    # Release resources
-    cap.release()
-    cv2.destroyAllWindows()
+    # Allow bare integer for webcam index
+    source = int(args.source) if args.source.isdigit() else args.source
+
+    pipeline = SurveillancePipeline(
+        source=source,
+        person_conf=args.person_conf,
+        weapon_conf=args.weapon_conf,
+        armed_threshold=args.armed_threshold,
+        person_model=args.person_model,
+        weapon_model=args.weapon_model,
+        device=int(args.device) if args.device.isdigit() else args.device,
+    )
+
+    print("╔══════════════════════════════════════╗")
+    print("║     ThreatSense-AI  •  Surveillance  ║")
+    print("╚══════════════════════════════════════╝")
+    pipeline.run()
+
 
 if __name__ == "__main__":
     main()

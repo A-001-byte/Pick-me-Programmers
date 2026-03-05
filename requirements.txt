@@ -5,5 +5,9 @@ numpy>=1.26.0
 pandas>=2.1.1
 PyJWT>=2.8.0
 flask-cors>=4.0.0
+scipy>=1.16.0
+filterpy>=1.4.5
+lap>=0.5.13
+scikit-image>=0.26.0
 # ByteTrack (install from source or appropriate repository)
 # bytetrack

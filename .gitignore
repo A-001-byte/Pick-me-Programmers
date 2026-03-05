@@ -3,9 +3,12 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Datasets and models (can be large)
+# Datasets and model weights (large files)
 datasets/
 models/
+models/*.pt
+models/*.engine
+models/*.onnx
 
 # YOLOv8 run outputs
 runs/
@@ -22,3 +25,5 @@ env/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+yolov8x.pt
