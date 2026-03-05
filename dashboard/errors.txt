@@ -1,4 +1,0 @@
-﻿.next/types/validator.ts(42,39): error TS2306: File 'D:/Pick-me-Programmers/dashboard/app/incidents/page.tsx' is not a module.
-.next/types/validator.ts(51,39): error TS2306: File 'D:/Pick-me-Programmers/dashboard/app/login/page.tsx' is not a module.
-.next/types/validator.ts(60,39): error TS2306: File 'D:/Pick-me-Programmers/dashboard/app/monitor/page.tsx' is not a module.
-.next/types/validator.ts(78,39): error TS2306: File 'D:/Pick-me-Programmers/dashboard/app/users/page.tsx' is not a module.

@@ -121,7 +121,7 @@ export default function LiveMonitor() {
                     </text>
                     <rect x="28%" y="71%" width="100" height="16" fill="#000000" fillOpacity="0.8" />
                     <text x="28.5%" y="72.5%" fill="#dc2626" fontSize="11" fontFamily="monospace">
-                      RISK: {alerts[0]?.risk_score ? Math.round(alerts[0].risk_score * 100) + '%' : '—'}
+                      RISK: {alerts[0]?.risk_score != null ? Math.round(alerts[0].risk_score * 100) + '%' : '—'}
                     </text>
                   </svg>
                 </div>

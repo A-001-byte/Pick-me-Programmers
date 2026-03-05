@@ -49,6 +49,7 @@ export default function LoginScreen() {
 
         <div className="bg-zinc-950 border border-zinc-800 p-6">
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* TODO: Migrate from localStorage JWT to HttpOnly cookies for better security */}
             {error && (
               <div className="bg-red-950/40 border border-red-900/50 text-red-400 text-xs p-2 font-mono">
                 {error}
@@ -89,11 +90,13 @@ export default function LoginScreen() {
             </button>
           </form>
 
-          <div className="mt-5 text-center">
-            <p className="text-xs text-zinc-600 font-mono">
-              Default: admin / admin
-            </p>
-          </div>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-5 text-center">
+              <p className="text-xs text-zinc-600 font-mono">
+                Default: admin / admin
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 text-center text-xs text-zinc-700 font-mono">

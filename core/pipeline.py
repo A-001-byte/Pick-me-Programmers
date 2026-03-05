@@ -15,14 +15,9 @@ Flow:
 
 from __future__ import annotations
 
-import sys
-import os
 import time
 from collections import deque
 from typing import Optional
-
-# Ensure project root is in python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import cv2
 import numpy as np

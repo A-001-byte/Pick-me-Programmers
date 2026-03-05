@@ -44,8 +44,8 @@ export default function Sidebar({ className = "" }: { className?: string }) {
               key={item.id}
               href={item.path}
               className={`w-full flex items-center gap-2.5 px-3 py-2 transition-colors text-xs ${isActive
-                  ? 'bg-red-950/50 text-red-400 border border-red-900/50'
-                  : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 border border-transparent'
+                ? 'bg-red-950/50 text-red-400 border border-red-900/50'
+                : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 border border-transparent'
                 }`}
             >
               <Icon className="w-4 h-4" />
@@ -57,6 +57,14 @@ export default function Sidebar({ className = "" }: { className?: string }) {
 
       <div className="p-3 border-t border-zinc-800">
         <button
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('token');
+              localStorage.removeItem('role');
+              // Option: trigger a router.push('/login') but window.location works simply
+              window.location.href = '/login';
+            }
+          }}
           className="w-full flex items-center justify-start text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 rounded-md text-xs px-3 py-2 transition font-medium"
         >
           <LogOut className="w-4 h-4 mr-2.5" />

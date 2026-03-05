@@ -1,78 +1,93 @@
 import sqlite3
 import os
 import sys
+import secrets
+import contextlib
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "surveillance.db")
+
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
+
 def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with contextlib.closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
 
-    # Create users table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            role TEXT DEFAULT 'operator',
-            status TEXT DEFAULT 'Active',
-            last_active TEXT DEFAULT 'Just now'
-        )
-    ''')
+        # Create users table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'operator',
+                status TEXT DEFAULT 'Active',
+                last_active TEXT DEFAULT 'Just now'
+            )
+        ''')
 
-    # Create alerts table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS alerts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            person_id TEXT,
-            event_type TEXT NOT NULL,
-            risk_score REAL NOT NULL,
-            risk_level TEXT DEFAULT 'low',
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            camera_id TEXT,
-            location TEXT DEFAULT 'Main Entrance',
-            status TEXT DEFAULT 'Active'
-        )
-    ''')
+        # Create alerts table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                person_id TEXT,
+                event_type TEXT NOT NULL,
+                risk_score REAL NOT NULL,
+                risk_level TEXT DEFAULT 'low',
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                camera_id TEXT,
+                location TEXT DEFAULT 'Main Entrance',
+                status TEXT DEFAULT 'Active'
+            )
+        ''')
 
-    # Create incidents table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS incidents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT,
-            event_type TEXT,
-            location TEXT DEFAULT 'Main Entrance',
-            risk_level TEXT DEFAULT 'low',
-            status TEXT DEFAULT 'open',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            resolved_at DATETIME
-        )
-    ''')
-    
-    # Seed default data if tables are empty
-    _seed_data(cursor)
+        # Create incidents table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS incidents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT,
+                event_type TEXT,
+                location TEXT DEFAULT 'Main Entrance',
+                risk_level TEXT DEFAULT 'low',
+                status TEXT DEFAULT 'open',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                resolved_at DATETIME
+            )
+        ''')
 
-    conn.commit()
-    conn.close()
+        # Seed default data if tables are empty
+        _seed_data(cursor)
+
+        conn.commit()
+
 
 def _seed_data(cursor):
     from werkzeug.security import generate_password_hash
 
-    # Seed users
+    # --- Seed admin user from env vars or generate random password ---
     cursor.execute('SELECT COUNT(*) FROM users')
     if cursor.fetchone()[0] == 0:
+        admin_user = os.environ.get("ADMIN_USERNAME", "admin")
+        admin_pass = os.environ.get("ADMIN_PASSWORD")
+
+        if not admin_pass:
+            admin_pass = secrets.token_urlsafe(12)
+            print(f"[SEED] No ADMIN_PASSWORD env var set.")
+            print(f"[SEED] Generated admin credentials:")
+            print(f"       Username: {admin_user}")
+            print(f"       Password: {admin_pass}")
+            print(f"[SEED] Set ADMIN_USERNAME / ADMIN_PASSWORD env vars to customise.")
+
         users = [
-            ("admin", generate_password_hash("admin"), "admin", "Active", "5 min ago"),
-            ("operator1", generate_password_hash("operator1"), "security", "Active", "12 min ago"),
-            ("viewer1", generate_password_hash("viewer1"), "viewer", "Active", "1 hour ago"),
+            (admin_user, generate_password_hash(admin_pass), "admin", "Active", "Just now"),
+            ("operator1", generate_password_hash(secrets.token_urlsafe(12)), "security", "Active", "12 min ago"),
+            ("viewer1", generate_password_hash(secrets.token_urlsafe(12)), "viewer", "Active", "1 hour ago"),
         ]
         cursor.executemany(
             'INSERT INTO users (username, password_hash, role, status, last_active) VALUES (?, ?, ?, ?, ?)',
@@ -113,6 +128,7 @@ def _seed_data(cursor):
             'INSERT INTO incidents (title, description, event_type, location, risk_level, status, created_at, resolved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             incidents
         )
+
 
 if __name__ == '__main__':
     init_db()

@@ -75,7 +75,7 @@ export default function IncidentHistory() {
     const matchRisk = riskFilter === 'all' || inc.risk_level === riskFilter;
     const matchStatus =
       statusFilter === 'all-status' ||
-      inc.status?.toLowerCase().replace(' ', '-') === statusFilter;
+      inc.status?.toLowerCase().replace(/\s+/g, '-') === statusFilter;
     return matchSearch && matchRisk && matchStatus;
   });
 
@@ -96,6 +96,7 @@ export default function IncidentHistory() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
                 <input
+                  aria-label="Search incidents"
                   placeholder="Search incidents..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -105,6 +106,7 @@ export default function IncidentHistory() {
               <div className="relative">
                 <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
                 <select
+                  aria-label="Filter by risk level"
                   value={riskFilter}
                   onChange={(e) => setRiskFilter(e.target.value)}
                   className="w-40 pl-9 bg-black border border-zinc-800 text-white text-xs h-9 rounded-md focus:outline-none focus:border-zinc-500 appearance-none cursor-pointer"
@@ -116,6 +118,7 @@ export default function IncidentHistory() {
                 </select>
               </div>
               <select
+                aria-label="Filter by status"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="w-40 bg-black border border-zinc-800 text-white text-xs h-9 px-3 rounded-md focus:outline-none focus:border-zinc-500 appearance-none cursor-pointer"

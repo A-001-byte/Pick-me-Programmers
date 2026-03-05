@@ -1,0 +1,4 @@
+﻿.next/dev/types/validator.ts(42,39): error TS2307: Cannot find module '../../../app/incidents/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(51,39): error TS2307: Cannot find module '../../../app/login/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(60,39): error TS2307: Cannot find module '../../../app/monitor/page.js' or its corresponding type declarations.
+.next/dev/types/validator.ts(78,39): error TS2307: Cannot find module '../../../app/users/page.js' or its corresponding type declarations.

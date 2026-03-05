@@ -16,4 +16,6 @@ class Event:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Event':
-        return cls(**data)
+        valid_names = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in valid_names}
+        return cls(**filtered)

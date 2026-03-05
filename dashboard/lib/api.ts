@@ -4,16 +4,15 @@ export async function apiFetch(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<Response> {
+    // TODO: Migrate from localStorage JWT to HttpOnly cookies for better security
     const token =
         typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        ...(options.headers as Record<string, string>),
-    };
+    const headers = new Headers(options.headers);
+    headers.set("Content-Type", "application/json");
 
     if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
+        headers.set("Authorization", `Bearer ${token}`);
     }
 
     const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -36,13 +35,18 @@ export async function login(
 }
 
 export async function getAlerts(limit = 50) {
-    const res = await apiFetch(`/alerts?limit=${limit}`);
+    const params = new URLSearchParams({ limit: limit.toString() });
+    const res = await apiFetch(`/alerts?${params.toString()}`);
     return res.json();
 }
 
 export async function getIncidents(status?: string) {
-    const query = status ? `?status=${status}` : "";
-    const res = await apiFetch(`/incidents${query}`);
+    const params = new URLSearchParams();
+    if (status) {
+        params.set("status", status);
+    }
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    const res = await apiFetch(`/incidents${queryString}`);
     return res.json();
 }
 

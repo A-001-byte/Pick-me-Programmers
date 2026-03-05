@@ -72,7 +72,11 @@ export default function UserManagement() {
           <div className="border-b border-zinc-800 p-4">
             <div className="flex items-center justify-between">
               <h2 className="text-white text-sm font-medium">User Accounts</h2>
-              <button className="flex items-center bg-red-900/50 hover:bg-red-900/70 text-red-400 border border-red-900/50 text-xs px-3 h-8 rounded-md transition-colors font-medium">
+              <button
+                type="button"
+                onClick={() => console.warn("Add User not implemented")}
+                className="flex items-center bg-red-900/50 hover:bg-red-900/70 text-red-400 border border-red-900/50 text-xs px-3 h-8 rounded-md transition-colors font-medium"
+              >
                 <UserPlus className="w-3 h-3 mr-1.5" />
                 Add User
               </button>
@@ -80,9 +84,11 @@ export default function UserManagement() {
           </div>
           <div className="p-4">
             <div className="mb-4">
-              <div className="relative">
+              <div className="relative flex items-center gap-2">
+                <label htmlFor="user-search" className="sr-only">Search users</label>
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
                 <input
+                  id="user-search"
                   placeholder="Search users..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -132,8 +138,8 @@ export default function UserManagement() {
                         <td className="p-3">
                           <div
                             className={`inline-block px-2 py-0.5 border rounded text-xs font-mono ${user.status === 'Active'
-                                ? 'bg-green-950/30 text-green-500 border-green-900/50'
-                                : 'bg-zinc-800 text-zinc-500 border-zinc-700'
+                              ? 'bg-green-950/30 text-green-500 border-green-900/50'
+                              : 'bg-zinc-800 text-zinc-500 border-zinc-700'
                               }`}
                           >
                             {user.status}
@@ -144,10 +150,20 @@ export default function UserManagement() {
                         </td>
                         <td className="p-3">
                           <div className="flex items-center gap-1">
-                            <button className="flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 h-7 w-7 rounded transition-colors">
+                            <button
+                              type="button"
+                              onClick={() => console.warn("Edit User not implemented")}
+                              className="flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 h-7 w-7 rounded transition-colors"
+                              aria-label={`Edit ${user.username}`}
+                            >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
-                            <button className="flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-red-950/30 h-7 w-7 rounded transition-colors">
+                            <button
+                              type="button"
+                              onClick={() => console.warn("Delete User not implemented")}
+                              className="flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-red-950/30 h-7 w-7 rounded transition-colors"
+                              aria-label={`Delete ${user.username}`}
+                            >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
