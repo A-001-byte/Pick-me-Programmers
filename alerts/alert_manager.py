@@ -129,7 +129,8 @@ class AlertManager:
                 elif "loitering" in behaviors:
                     event_type = "Loitering Detected"
                 elif behaviors:
-                    event_type = behaviors[0].replace("_", " ").title()
+                    # Use sorted behaviors for deterministic event_type
+                    event_type = sorted(behaviors)[0].replace("_", " ").title()
                 else:
                     event_type = "Suspicious Behavior"
                 
