@@ -68,12 +68,16 @@ def create_app():
     app = Flask(__name__)
 
     # Start the AI pipeline thread after Flask app is created
-    thread = threading.Thread(
-        target=run_pipeline, 
-        args=(person_model, weapon_model), 
-        daemon=True
-    )
-    thread.start()
+    # Guard against duplicate threads when using the Werkzeug reloader
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or os.environ.get("FLASK_DEBUG") != "1":
+        thread = threading.Thread(
+            target=run_pipeline, 
+            args=(person_model, weapon_model), 
+            daemon=True
+        )
+        thread.start()
+    else:
+        print("[backend] Reloader detected, skipping pipeline startup in parent process...")
     limiter.init_app(app)
 
     # --- SECRET_KEY: load from env, fail in production if missing ---
