@@ -1,71 +1,82 @@
-"""
-ThreatSense-AI — Risk Engine Main Pipeline
-============================================
-Simulates a real-time surveillance feed by sending tracked-person data
-through the Risk Engine decision layer.
+import sys
+import os
 
-Usage:
-    python main.py
-"""
+# Ensure project root is in python path for module imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import json
-import time
-from engine.risk_engine import RiskEngine
-from risk_logging.event_logger import EventLogger
-
-logger = EventLogger("MainPipeline")
+import cv2
+from core.pipeline import SurveillancePipeline
 
 def main():
-    logger.info("ThreatSense-AI Risk Engine starting up...")
+    """
+    Main pipeline for Surveillance System.
+    Continuously processes CCTV video streams.
+    """
+    print("Initializing Surveillance System...")
+    pipeline = SurveillancePipeline()
     
-    engine = RiskEngine()
+    # Capture video from webcam using OpenCV
+    cap = cv2.VideoCapture(0)
     
-    # ---------------------------------------------------------------
-    # Simulated frames from tracking pipeline (Members 1 & 2 output)
-    # Each frame is a list of tracked persons in that moment
-    # ---------------------------------------------------------------
-    simulated_frames = [
-        # Frame 1: Two people, minor activity
-        [
-            {"id": 1, "bbox": [100, 200, 180, 350], "speed": 1.2, "loitering": True,  "zone_intrusion": False, "weapon_detected": False},
-            {"id": 2, "bbox": [300, 120, 380, 330], "speed": 0.5, "loitering": False, "zone_intrusion": False, "weapon_detected": False},
-        ],
-        # Frame 2: Person 1 continues loitering, Person 2 enters restricted zone
-        [
-            {"id": 1, "bbox": [105, 205, 185, 355], "speed": 0.8, "loitering": True,  "zone_intrusion": False, "weapon_detected": False},
-            {"id": 2, "bbox": [310, 130, 390, 340], "speed": 2.8, "loitering": False, "zone_intrusion": True,  "weapon_detected": False},
-        ],
-        # Frame 3: Person 1 now intrudes zone (escalation!), Person 3 appears with weapon
-        [
-            {"id": 1, "bbox": [110, 210, 190, 360], "speed": 3.5, "loitering": True,  "zone_intrusion": True,  "weapon_detected": False},
-            {"id": 3, "bbox": [500, 100, 580, 300], "speed": 0.2, "loitering": False, "zone_intrusion": True,  "weapon_detected": True},
-        ],
-        # Frame 4: All calm — demonstrates decay
-        [
-            {"id": 1, "bbox": [115, 215, 195, 365], "speed": 0.3, "loitering": False, "zone_intrusion": False, "weapon_detected": False},
-            {"id": 2, "bbox": [320, 140, 400, 350], "speed": 0.4, "loitering": False, "zone_intrusion": False, "weapon_detected": False},
-        ],
-    ]
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+        return
+
+    print("Starting video stream analysis. Press 'q' to quit.")
     
-    for frame_idx, frame in enumerate(simulated_frames):
-        print(f"\n{'='*60}")
-        logger.info(f"Processing Frame {frame_idx + 1} — {len(frame)} person(s) detected")
-        print(f"{'='*60}")
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Error: Failed to capture image.")
+            break
         
-        results = engine.process_frame(frame)
+        # Process each frame through pipeline
+        try:
+            alerts = pipeline.process_frame(frame)
+        except Exception as e:
+            # Catching exceptions if modules are not fully implemented yet
+            print(f"Pipeline error: {e}")
+            alerts = []
+
+        # Draw bounding boxes and alert information
+        if alerts:
+            for alert in alerts:
+                # Handle both Event object and dict for flexibility
+                if hasattr(alert, "to_dict"):
+                    alert_data = alert.to_dict()
+                elif isinstance(alert, dict):
+                    alert_data = alert
+                else:
+                    continue
+                    
+                person_id = alert_data.get("person_id", "Unknown")
+                bbox = alert_data.get("bbox", [])
+                event_type = alert_data.get("event_type", "Unknown")
+                risk_score = alert_data.get("risk_score", 0.0)
+                
+                # Show person ID, risk score, and event type
+                text = f"ID: {person_id} | {event_type} | Risk: {risk_score:.2f}"
+                
+                # Bbox expected in format [x_min, y_min, x_max, y_max]
+                if bbox and len(bbox) >= 4:
+                    x1, y1, x2, y2 = map(int, bbox[:4])
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                    cv2.putText(frame, text, (x1, max(y1 - 10, 10)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                else:
+                    # Generic display if no valid bbox is returned
+                    cv2.putText(frame, text, (10, 30),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+        # Display video feed
+        cv2.imshow('Surveillance Feed', frame)
         
-        for r in results:
-            print(f"\n  Person {r['person_id']}:")
-            print(f"    Score  : {r['risk_score']}")
-            print(f"    Level  : {r['threat_level']}")
-            print(f"    Reasons:")
-            for reason in r["reasons"]:
-                print(f"      - {reason}")
-        
-        # Simulate small time gap between frames
-        time.sleep(0.5)
-    
-    logger.info("Pipeline simulation complete.")
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    # Release resources
+    cap.release()
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()

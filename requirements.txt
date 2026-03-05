@@ -1,2 +1,9 @@
-# No external dependencies are currently required for this basic implementation.
-# In a production environment, you might include packages for database, message queues (like Celery/Kafka), or web frameworks.
+ultralytics>=8.0.200
+opencv-python>=4.8.1.78
+Flask>=3.0.0
+numpy>=1.26.0
+pandas>=2.1.1
+PyJWT>=2.8.0
+flask-cors>=4.0.0
+# ByteTrack (install from source or appropriate repository)
+# bytetrack
