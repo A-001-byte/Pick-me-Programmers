@@ -31,6 +31,26 @@ def normalize_risk_score(raw_score: float) -> float:
     return max(0.0, min(1.0, score))
 
 
+# Mapping from threat levels to DB-supported risk levels
+THREAT_TO_RISK_LEVEL = {
+    "normal": "low",
+    "low": "low",
+    "suspicious": "medium",
+    "medium": "medium",
+    "high": "high",
+    "critical": "critical",
+}
+
+
+def normalize_threat_level(threat_level: str) -> str:
+    """Map threat level to DB-supported risk level.
+    
+    Maps incoming threat levels to: low, medium, high, critical.
+    Unknown values default to 'low'.
+    """
+    return THREAT_TO_RISK_LEVEL.get(threat_level.lower(), "low")
+
+
 class AlertManager:
     """Manages the generation and dispatch of security alerts."""
     
@@ -115,23 +135,25 @@ class AlertManager:
                 
                 # Normalize risk_score to 0.0-1.0 range
                 risk_score = normalize_risk_score(decision["risk_score"])
+                # Normalize threat_level to DB-supported risk_level
+                risk_level = normalize_threat_level(decision["threat_level"])
                 
                 db_add_alert(
                     person_id=str(decision["person_id"]),
                     event_type=event_type,
                     risk_score=risk_score,
-                    risk_level=decision["threat_level"].lower(),
+                    risk_level=risk_level,
                     camera_id=self.camera_id
                 )
 
                 # Promote high-priority detections to incidents
-                if db_add_incident is not None and decision["threat_level"].lower() in ("high", "critical"):
+                if db_add_incident is not None and risk_level in ("high", "critical"):
                     db_add_incident(
                         title=f"{event_type}: ID {decision['person_id']}",
                         description=f"Automated incident for {decision['person_id']}. Reasons: {', '.join(decision.get('reasons', []))}",
                         event_type=event_type,
                         location="Main Entrance",  # Could be dynamic if configured
-                        risk_level=decision["threat_level"].lower(),
+                        risk_level=risk_level,
                         status="open"
                     )
             except Exception:
