@@ -5,20 +5,27 @@ import {
   AlertCircle,
   Users,
   Shield,
-  LogOut,
   Activity
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/components/AuthProvider';
 
 export default function Sidebar({ className = "" }: { className?: string }) {
   const pathname = usePathname();
+  const { role } = useAuth();
 
-  const navItems = [
-    { id: 'monitor', path: '/monitor', label: 'LIVE SURVEILLANCE', icon: MonitorPlay, emoji: '📡' },
-    { id: 'incidents', path: '/incidents', label: 'INCIDENT LOG', icon: AlertCircle, emoji: '📋' },
-    { id: 'users', path: '/users', label: 'OPERATORS', icon: Users, emoji: '👥' },
+  const allNavItems = [
+    { id: 'monitor', path: '/monitor', label: 'LIVE SURVEILLANCE', icon: MonitorPlay, emoji: '📡', roles: null },
+    { id: 'incidents', path: '/incidents', label: 'INCIDENT LOG', icon: AlertCircle, emoji: '📋', roles: null },
+    { id: 'users', path: '/users', label: 'OPERATORS', icon: Users, emoji: '👥', roles: ['admin'] },
   ];
+
+  // Filter nav items by role
+  const navItems = allNavItems.filter((item) => {
+    if (!item.roles) return true; // visible to all roles
+    return item.roles.includes(role || '');
+  });
 
   return (
     <div className={`bg-black/40 backdrop-blur-md border-r border-[#00e5ff]/20 flex flex-col h-screen ${className}`}>
@@ -84,23 +91,6 @@ export default function Sidebar({ className = "" }: { className?: string }) {
           </div>
           <p className="text-zinc-500 text-[10px] font-mono">Neural threat detection online...</p>
         </div>
-      </div>
-
-      {/* Logout */}
-      <div className="p-3 border-t border-[#00e5ff]/20">
-        <button
-          onClick={() => {
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('token');
-              localStorage.removeItem('role');
-              window.location.href = '/login';
-            }
-          }}
-          className="w-full flex items-center justify-start text-red-500/70 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 rounded-md text-xs px-3 py-2 transition-all font-mono uppercase tracking-wider"
-        >
-          <LogOut className="w-4 h-4 mr-2.5" />
-          <span>🔌 DISCONNECT</span>
-        </button>
       </div>
     </div>
   );
