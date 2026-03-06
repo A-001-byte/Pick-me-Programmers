@@ -160,24 +160,13 @@ class AlertManager:
             except Exception:
                 logger.exception("Failed to persist alert/incident to DB")
         
-        # Console output for debugging
-        print(f"\n{'='*60}")
-        print(f"  *** {priority} ***")
-        print(f"  Person ID : {alert['person_id']}")
-        print(f"  Score     : {alert['risk_score']}")
-        print(f"  Level     : {alert['threat_level']}")
-        print(f"  Reasons   :")
-        for r in alert["reasons"]:
-            print(f"    - {r}")
-        print(f"{'='*60}\n")
+        # Compact log line (was verbose multi-line print block)
+        reasons_str = "; ".join(alert["reasons"][:3])  # Show top 3 reasons
+        logger.info(f"[ALERT] {priority} | ID:{alert['person_id']} | Score:{alert['risk_score']} | {alert['threat_level']} | {reasons_str}")
         
         return alert
 
     def evaluate_group_alerts(self, group_alerts: List[Dict[str, Any]]):
         """Handles group-level alerts from the GroupBehaviorDetector."""
         for ga in group_alerts:
-            print(f"\n{'#'*60}")
-            print(f"  *** GROUP THREAT: {ga['type']} ***")
-            print(f"  Members   : {ga['members']}")
-            print(f"  Details   : {ga['description']}")
-            print(f"{'#'*60}\n")
+            logger.info(f"[GROUP ALERT] {ga['type']} | Members:{ga['members']} | {ga['description']}")

@@ -17,9 +17,12 @@ Flow:
 
 from __future__ import annotations
 
+import logging
 import time
 from collections import deque
 from typing import Optional
+
+_log = logging.getLogger(__name__)
 
 import cv2
 import numpy as np
@@ -131,197 +134,221 @@ class SurveillancePipeline:
 
     def run(self) -> None:
         """Start the live surveillance loop.  Press **q** to quit."""
-        cap = cv2.VideoCapture(self.source)
-        if not cap.isOpened():
-            raise RuntimeError(
-                f"Cannot open video source: {self.source}"
-            )
+        backoff_seconds = 3
 
-        # Configure webcam for optimal FPS
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        cap.set(cv2.CAP_PROP_FPS, 30)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffer for lower latency
+        def open_capture():
+            # Try default backend first, then DirectShow (helps on Windows)
+            cap_primary = cv2.VideoCapture(self.source)
+            if cap_primary.isOpened():
+                return cap_primary
+            cap_primary.release()
+            cap_alt = cv2.VideoCapture(self.source, cv2.CAP_DSHOW)
+            if cap_alt.isOpened():
+                return cap_alt
+            cap_alt.release()
+            return None
 
-        actual_fps = cap.get(cv2.CAP_PROP_FPS)
-        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        print(f"[pipeline] Webcam configured: {actual_w}x{actual_h} @ {actual_fps} FPS")
+        while True:
+            cap = open_capture()
+            if cap is None:
+                print(f"[pipeline] Cannot open video source: {self.source}. Retrying in {backoff_seconds}s…")
+                time.sleep(backoff_seconds)
+                continue
 
-        print(f"[pipeline] Streaming from source={self.source}  "
-              f"(press 'q' to quit)")
+            # Configure webcam for optimal FPS
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_FPS, 30)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffer for lower latency
 
-        try:
-            while True:
-                t0 = time.perf_counter()
+            actual_fps = cap.get(cv2.CAP_PROP_FPS)
+            actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            print(f"[pipeline] Webcam configured: {actual_w}x{actual_h} @ {actual_fps} FPS")
 
-                ret, frame = cap.read()
-                if not ret:
-                    print("[pipeline] End of stream.")
-                    break
+            print(f"[pipeline] Streaming from source={self.source}  "
+                  f"(press 'q' to quit)")
 
-                # ── 1. Detect + track persons (ByteTrack) ────────────
-                tracked = self.person_det.track(
-                    frame, conf=self.person_conf,
-                )
+            try:
+                while True:
+                    t0 = time.perf_counter()
 
-                # ── 2. Per-person weapon detection ───────────────────
-                active_ids: set[int] = set()
-                person_states: list[dict] = []
-
-                # Collect all weapon detections across all persons this frame.
-                # Also build the tracked-person list in the format expected by
-                # WeaponVerifier and BehaviorAnalyzer.
-                all_weapon_dets: list = []
-                tracked_for_analyzer: list[dict] = []
-
-                for px1, py1, px2, py2, pconf, tid in tracked:
-                    active_ids.add(tid)
-                    tracked_for_analyzer.append({
-                        "id": tid,
-                        "bbox": [px1, py1, px2, py2],
-                    })
-
-                    # Only run weapon detection every weapon_skip frames
-                    should_detect = (self._frame_count % self.weapon_skip == 0)
-                    
-                    if should_detect:
-                        weapons = self.weapon_det.detect_in_region(
-                            frame,
-                            (px1, py1, px2, py2),
-                            conf=self.weapon_conf,
-                        )
-                        all_weapon_dets.extend(weapons)
-
-                        # ── Visual display buffer (TTL-based) ───────────────
-                        # Keep only weapons above the armed threshold for display.
-                        high_conf = [
-                            w for w in weapons if w[4] >= self.armed_threshold
-                        ]
-                        if high_conf:
-                            self._weapon_buffer[tid] = {
-                                "weapons": high_conf,
-                                "ttl": self.persist_frames,
-                            }
-                    
-                    # TTL decay happens on EVERY frame (not just detection frames)
-                    # so persist_frames corresponds to actual frames, not detection cycles
-                    if tid in self._weapon_buffer and not (should_detect and high_conf if should_detect else False):
-                        self._weapon_buffer[tid]["ttl"] -= 1
-                        if self._weapon_buffer[tid]["ttl"] <= 0:
-                            del self._weapon_buffer[tid]
-
-                    buffered = self._weapon_buffer.get(tid)
-                    is_armed_display = buffered is not None
-                    shown_weapons = buffered["weapons"] if buffered else []
-                    
-                    person_states.append({
-                        "bbox": (px1, py1, px2, py2),
-                        "conf": pconf,
-                        "track_id": tid,
-                        "armed": is_armed_display,
-                        "weapons": shown_weapons,
-                    })
-
-                # Clean up display buffer for disappeared tracks
-                vanished = [
-                    tid for tid in self._weapon_buffer
-                    if tid not in active_ids
-                ]
-                for tid in vanished:
-                    del self._weapon_buffer[tid]
-
-                # ── 3. WeaponVerifier — multi-frame confirmation ──────
-                # Associates weapon bboxes to person bboxes via IoU and
-                # accumulates frame counts + confidence scores.  A weapon is
-                # confirmed only when frames >= 3 AND avg_conf >= 0.6.
-                # Note: only update if we actually ran detection this frame.
-                if self._frame_count % self.weapon_skip == 0:
-                    confirmed_armed_ids = self.weapon_verifier.update(
-                        all_weapon_dets, tracked_for_analyzer
-                    )
-                else:
-                    # On skipped frames, get current confirmed IDs from verifier
-                    confirmed_armed_ids = self.weapon_verifier.get_confirmed_ids()
-
-                # ── 4. Propagate confirmed weapon flags to BehaviorAnalyzer
-                for p in tracked_for_analyzer:
-                    pid = p["id"]
-                    self.behavior_analyzer.set_weapon_flag(
-                        pid, pid in confirmed_armed_ids
-                    )
-
-                # ── 5. Behavior analysis ─────────────────────────────
-                behavior_results = self.behavior_analyzer.analyze(
-                    tracked_for_analyzer
-                )
-
-                # ── 6. Risk engine — threat scoring + alert dispatch ─
-                # Process through risk engine (only every risk_skip frames to reduce CPU/logging)
-                should_process_risk = (self._frame_count % self.risk_skip == 0)
-                if behavior_results and should_process_risk:
-                    risk_decisions = self.risk_engine.process_frame(behavior_results)
-                    # Store decisions for drawing
-                    for rd in risk_decisions:
-                        self._risk_decisions[rd["person_id"]] = rd
-                
-                # Prune stale entries from _risk_decisions (track IDs no longer active)
-                # This prevents cached decisions from being applied to recycled track IDs
-                current_tids = {ps["track_id"] for ps in person_states}
-                stale_tids = [tid for tid in self._risk_decisions if tid not in current_tids]
-                for tid in stale_tids:
-                    del self._risk_decisions[tid]
-                
-                # Update person_states with risk info
-                for ps in person_states:
-                    tid = ps["track_id"]
-                    if tid in self._risk_decisions:
-                        ps["risk_score"] = self._risk_decisions[tid].get("risk_score", 0)
-                        ps["threat_level"] = self._risk_decisions[tid].get("threat_level", "low")
-                    else:
-                        ps["risk_score"] = 0
-                        ps["threat_level"] = "low"
-
-                # ── 7. Print confirmed weapon detections ─────────────
-                for ps in person_states:
-                    for wx1, wy1, wx2, wy2, wconf, wname in ps["weapons"]:
-                        status = "CONFIRMED" if ps["track_id"] in confirmed_armed_ids else "unverified"
-                        print(
-                            f"ID {ps['track_id']} - {wname} [{status}]: "
-                            f"[{wx1}, {wy1}, {wx2}, {wy2}, conf={wconf:.3f}]"
-                        )
-
-                # ── 8. Draw overlays ─────────────────────────────────
-                self._draw(frame, person_states)
-
-                # ── 9. FPS counter ───────────────────────────────────
-                elapsed = time.perf_counter() - t0
-                self._fps_window.append(elapsed)
-                fps = len(self._fps_window) / sum(self._fps_window)
-                cv2.putText(
-                    frame,
-                    f"FPS: {fps:.1f}",
-                    (10, 30),
-                    FONT,
-                    1.0,
-                    COLOR_FPS,
-                    2,
-                )
-
-                # ── 10. Push to Stream Manager ────────────────────────
-                stream_manager.update_frame(frame)
-                self._frame_count += 1
-
-                # ── 11. Display ──────────────────────────────────────
-                if not self.headless:
-                    cv2.imshow("ThreatSense-AI", frame)
-                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                    ret, frame = cap.read()
+                    if not ret:
+                        print("[pipeline] Frame grab failed. Reinitializing camera…")
                         break
 
-        finally:
-            cap.release()
-            cv2.destroyAllWindows()
-            print("[pipeline] Stopped.")
+                    # ── 1. Detect + track persons (ByteTrack) ────────────
+                    tracked = self.person_det.track(
+                        frame, conf=self.person_conf,
+                    )
+
+                    # ── 2. Per-person weapon detection ───────────────────
+                    active_ids: set[int] = set()
+                    person_states: list[dict] = []
+
+                    # Collect all weapon detections across all persons this frame.
+                    # Also build the tracked-person list in the format expected by
+                    # WeaponVerifier and BehaviorAnalyzer.
+                    all_weapon_dets: list = []
+                    tracked_for_analyzer: list[dict] = []
+
+                    for px1, py1, px2, py2, pconf, tid in tracked:
+                        active_ids.add(tid)
+                        tracked_for_analyzer.append({
+                            "id": tid,
+                            "bbox": [px1, py1, px2, py2],
+                        })
+
+                        # Only run weapon detection every weapon_skip frames
+                        should_detect = (self._frame_count % self.weapon_skip == 0)
+                    
+                        if should_detect:
+                            weapons = self.weapon_det.detect_in_region(
+                                frame,
+                                (px1, py1, px2, py2),
+                                conf=self.weapon_conf,
+                            )
+                            all_weapon_dets.extend(weapons)
+
+                            # ── Visual display buffer (TTL-based) ───────────────
+                            # Keep only weapons above the armed threshold for display.
+                            high_conf = [
+                                w for w in weapons if w[4] >= self.armed_threshold
+                            ]
+                            if high_conf:
+                                self._weapon_buffer[tid] = {
+                                    "weapons": high_conf,
+                                    "ttl": self.persist_frames,
+                                }
+                    
+                        # TTL decay happens on EVERY frame (not just detection frames)
+                        # so persist_frames corresponds to actual frames, not detection cycles
+                        if tid in self._weapon_buffer and not (should_detect and high_conf if should_detect else False):
+                            self._weapon_buffer[tid]["ttl"] -= 1
+                            if self._weapon_buffer[tid]["ttl"] <= 0:
+                                del self._weapon_buffer[tid]
+
+                        buffered = self._weapon_buffer.get(tid)
+                        is_armed_display = buffered is not None
+                        shown_weapons = buffered["weapons"] if buffered else []
+                    
+                        person_states.append({
+                            "bbox": (px1, py1, px2, py2),
+                            "conf": pconf,
+                            "track_id": tid,
+                            "armed": is_armed_display,
+                            "weapons": shown_weapons,
+                        })
+
+                    # Clean up display buffer for disappeared tracks
+                    vanished = [
+                        tid for tid in self._weapon_buffer
+                        if tid not in active_ids
+                    ]
+                    for tid in vanished:
+                        del self._weapon_buffer[tid]
+
+                    # ── 3. WeaponVerifier — multi-frame confirmation ──────
+                    # Associates weapon bboxes to person bboxes via IoU and
+                    # accumulates frame counts + confidence scores.  A weapon is
+                    # confirmed only when frames >= 3 AND avg_conf >= 0.6.
+                    # Note: only update if we actually ran detection this frame.
+                    if self._frame_count % self.weapon_skip == 0:
+                        confirmed_armed_ids = self.weapon_verifier.update(
+                            all_weapon_dets, tracked_for_analyzer
+                        )
+                    else:
+                        # On skipped frames, get current confirmed IDs from verifier
+                        confirmed_armed_ids = self.weapon_verifier.get_confirmed_ids()
+
+                    # ── 4. Propagate confirmed weapon flags to BehaviorAnalyzer
+                    for p in tracked_for_analyzer:
+                        pid = p["id"]
+                        self.behavior_analyzer.set_weapon_flag(
+                            pid, pid in confirmed_armed_ids
+                        )
+
+                    # ── 5. Behavior analysis ─────────────────────────────
+                    behavior_results = self.behavior_analyzer.analyze(
+                        tracked_for_analyzer
+                    )
+
+                    # ── 6. Risk engine — threat scoring + alert dispatch ─
+                    # Process through risk engine (only every risk_skip frames to reduce CPU/logging)
+                    should_process_risk = (self._frame_count % self.risk_skip == 0)
+                    if behavior_results and should_process_risk:
+                        risk_decisions = self.risk_engine.process_frame(behavior_results)
+                        # Store decisions for drawing
+                        for rd in risk_decisions:
+                            self._risk_decisions[rd["person_id"]] = rd
+                
+                    # Prune stale entries from _risk_decisions (track IDs no longer active)
+                    # This prevents cached decisions from being applied to recycled track IDs
+                    current_tids = {ps["track_id"] for ps in person_states}
+                    stale_tids = [tid for tid in self._risk_decisions if tid not in current_tids]
+                    for tid in stale_tids:
+                        del self._risk_decisions[tid]
+                
+                    # Update person_states with risk info
+                    for ps in person_states:
+                        tid = ps["track_id"]
+                        if tid in self._risk_decisions:
+                            ps["risk_score"] = self._risk_decisions[tid].get("risk_score", 0)
+                            ps["threat_level"] = self._risk_decisions[tid].get("threat_level", "low")
+                        else:
+                            ps["risk_score"] = 0
+                            ps["threat_level"] = "low"
+
+                    # ── 7. Log confirmed weapon detections (debug only) ────
+                    for ps in person_states:
+                        for wx1, wy1, wx2, wy2, wconf, wname in ps["weapons"]:
+                            status = "CONFIRMED" if ps["track_id"] in confirmed_armed_ids else "unverified"
+                            _log.debug(
+                                "ID %s - %s [%s]: [%s, %s, %s, %s, conf=%.3f]",
+                                ps['track_id'], wname, status,
+                                wx1, wy1, wx2, wy2, wconf,
+                            )
+
+                    # ── 8. Draw overlays ─────────────────────────────────
+                    self._draw(frame, person_states)
+
+                    # ── 9. FPS counter ───────────────────────────────────
+                    elapsed = time.perf_counter() - t0
+                    self._fps_window.append(elapsed)
+                    fps = len(self._fps_window) / sum(self._fps_window)
+                    cv2.putText(
+                        frame,
+                        f"FPS: {fps:.1f}",
+                        (10, 30),
+                        FONT,
+                        1.0,
+                        COLOR_FPS,
+                        2,
+                    )
+
+                    # ── 10. Push to Stream Manager ────────────────────────
+                    stream_manager.update_frame(frame)
+                    self._frame_count += 1
+
+                    # ── 11. Display ──────────────────────────────────────
+                    if not self.headless:
+                        cv2.imshow("ThreatSense-AI", frame)
+                        if cv2.waitKey(1) & 0xFF == ord("q"):
+                            raise KeyboardInterrupt
+
+            except KeyboardInterrupt:
+                print("[pipeline] Stop signal received. Exiting loop.")
+                cap.release()
+                cv2.destroyAllWindows()
+                break
+            except Exception as e:
+                print(f"[pipeline] Error in run loop: {e}. Restarting in {backoff_seconds}s…")
+            finally:
+                cap.release()
+                cv2.destroyAllWindows()
+                print("[pipeline] Stream stopped. Attempting restart…")
+                time.sleep(backoff_seconds)
 
     # ── drawing helpers ──────────────────────────────────────────────
 

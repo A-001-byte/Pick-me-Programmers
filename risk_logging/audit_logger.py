@@ -24,9 +24,6 @@ class AuditLogger:
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
-        # Log to file
+        # Log to file (console printing removed to avoid log flooding)
         with open(self.log_file, "a") as f:
             f.write(json.dumps(entry) + "\n")
-            
-        # Also print to console for demonstration
-        print(f"[AUDIT] Decision Logged: {json.dumps(entry)}")

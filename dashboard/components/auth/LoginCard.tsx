@@ -1,77 +1,38 @@
 "use client";
 
-import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { login } from '@/lib/api';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
-export default function LoginScreen() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [waitingForFlash, setWaitingForFlash] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+export default function LoginCard() {
   const router = useRouter();
+  const [operatorId, setOperatorId] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const AUTH_BASE = process.env.NEXT_PUBLIC_AUTH_URL || "http://localhost:5000/api";
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setLoading(true);
 
     try {
-      const result = await login(username, password);
+      const response = await fetch(`${AUTH_BASE}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: operatorId, password }),
+      });
 
-      if ('token' in result) {
-        localStorage.setItem('token', result.token);
-        localStorage.setItem('role', result.role);
-        localStorage.setItem('username', username);
-        // Wait for video to reach the flash at the end
-        setWaitingForFlash(true);
-        const video = videoRef.current;
-        if (video) {
-          let rafId: number | null = null;
-          let attempts = 0;
-          const maxAttempts = 600; // ~10 seconds at 60fps
-
-          const checkFlash = () => {
-            attempts++;
-            // Redirect when video is near the end (last 0.3 seconds where flash occurs)
-            // or if we've waited too long (fallback timeout)
-            if ((video.duration && video.duration - video.currentTime <= 0.3) || attempts >= maxAttempts) {
-              router.push('/monitor');
-            } else {
-              rafId = requestAnimationFrame(checkFlash);
-            }
-          };
-
-          // Handle video metadata not loading
-          const handleError = () => {
-            if (rafId) cancelAnimationFrame(rafId);
-            router.push('/monitor');
-          };
-
-          video.addEventListener('error', handleError, { once: true });
-
-          // Start checking, with fallback if duration isn't ready
-          if (video.readyState >= 1 && video.duration) {
-            checkFlash();
-          } else {
-            video.addEventListener('loadedmetadata', () => checkFlash(), { once: true });
-            // Fallback timeout in case metadata never loads
-            setTimeout(() => {
-              if (rafId) cancelAnimationFrame(rafId);
-              router.push('/monitor');
-            }, 10000);
-          }
-        } else {
-          // Fallback if no video
-          router.push('/monitor');
-        }
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("role", data.role);
+        localStorage.setItem("username", operatorId);
+        router.push("/dashboard");
       } else {
-        setError(result.error || 'UNRECOGNIZED BIOMETRIC/KEY');
+        alert("Invalid credentials");
       }
-    } catch {
-      setError('CONNECTION FAILED: HOST UNREACHABLE');
+    } catch (error) {
+      alert("Invalid credentials");
     } finally {
       setLoading(false);
     }
@@ -115,27 +76,21 @@ export default function LoginScreen() {
       `}</style>
 
       <div className="min-h-screen bg-dark flex items-center justify-center relative overflow-hidden font-sans">
-
-        {/* Background Video Element */}
         <video
-          ref={videoRef}
           autoPlay
           loop
           muted
           playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-50 z-0"
+          className="absolute inset-0 w-full h-full object-cover opacity-50 z-0 pointer-events-none"
         >
-          {/* Place your video in the /public folder of your Next.js app */}
           <source src="/surveillance-bg.mp4" type="video/mp4" />
         </video>
 
-        {/* Video Overlay (darkens the video so the UI remains readable) */}
         <div className="absolute inset-0 bg-[#0a0a0c]/40 z-1 pointer-events-none"></div>
 
         <div className="scanlines"></div>
 
-        {/* Main Login Card */}
-        <div className="relative z-10 bg-[#0a0a0c]/80 backdrop-blur-md border border-cyan/30 p-10 w-[380px] rounded shadow-cyan overflow-hidden">
+        <div className="relative z-10 bg-[#0a0a0c]/80 backdrop-blur-md border border-cyan/30 p-10 w-[380px] rounded shadow-cyan overflow-hidden pointer-events-auto">
           <div className="weapon-scanner"></div>
 
           <div className="text-center mb-8 relative z-20">
@@ -147,22 +102,15 @@ export default function LoginScreen() {
             <p className="font-mono text-[10px] text-zinc-400 tracking-[1px]">{'// SECURE UPLINK //'}</p>
           </div>
 
-          {error && (
-            <div className="glitch-anim border-l-2 border-red-500 bg-red-500/10 p-2.5 font-mono text-xs text-red-500 mb-5 relative z-20">
-              ⚠️ ERR 401: {error}
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-5 relative z-20">
             <div className="space-y-1.5 flex flex-col">
-              <label htmlFor="username" className="font-mono text-[11px] text-cyan uppercase">Operator ID 👤</label>
+              <label htmlFor="operatorId" className="font-mono text-[11px] text-cyan uppercase">Operator ID 👤</label>
               <input
-                id="username"
+                id="operatorId"
                 type="text"
-                autoComplete="username"
                 placeholder="SYS_ADMIN_01"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={operatorId}
+                onChange={(event) => setOperatorId(event.target.value)}
                 className="w-full p-2.5 bg-black/60 border border-zinc-800 text-white font-mono text-sm focus:outline-none focus:border-cyan transition-colors"
                 required
               />
@@ -173,10 +121,9 @@ export default function LoginScreen() {
               <input
                 id="password"
                 type="password"
-                autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(event) => setPassword(event.target.value)}
                 className="w-full p-2.5 bg-black/60 border border-zinc-800 text-white font-mono text-sm focus:outline-none focus:border-cyan transition-colors"
                 required
               />
@@ -184,26 +131,16 @@ export default function LoginScreen() {
 
             <button
               type="submit"
-              disabled={loading || waitingForFlash}
+              disabled={loading}
               className="w-full p-3 bg-black/40 border border-cyan text-cyan font-mono uppercase cursor-pointer transition-all hover:bg-cyan-dim hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] disabled:border-zinc-600 disabled:text-zinc-600 flex items-center justify-center mt-2"
             >
-              {waitingForFlash ? (
-                <span className="pulse-anim">Syncing...</span>
-              ) : loading ? (
-                <span className="pulse-anim">Authenticating...</span>
-              ) : (
-                <span className="tracking-[1px] font-bold">Initialize Connection</span>
-              )}
+              {loading ? <span className="pulse-anim">Authenticating...</span> : <span className="tracking-[1px] font-bold">INITIALIZE CONNECTION</span>}
             </button>
           </form>
 
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mt-6 text-center relative z-20">
-              <p className="text-[10px] text-zinc-600 font-mono">
-                DEV OVERRIDE: admin / admin
-              </p>
-            </div>
-          )}
+          <div className="mt-4 text-center text-xs text-zinc-400 font-mono relative z-20">
+            New Operator? <button type="button" onClick={() => router.push("/signup")} className="text-cyan underline decoration-dotted hover:text-white transition-colors">Register</button>
+          </div>
         </div>
       </div>
     </>

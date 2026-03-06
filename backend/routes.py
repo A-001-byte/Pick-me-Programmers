@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, current_app, Response
 from backend.database import get_db_connection, add_alert, add_incident
 from core.stream_manager import stream_manager
 import time
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -99,6 +99,56 @@ def login():
 
     return jsonify({'error': 'Invalid username or password'}), 401
 
+
+@api_bp.route('/register', methods=['POST'])
+@limiter.limit("5 per minute")
+def register():
+    data = request.get_json()
+    if not data:
+        return jsonify({'message': 'Missing request body'}), 400
+
+    username = (data.get('username') or '').strip()
+    email = (data.get('email') or '').strip()
+    password = data.get('password') or ''
+
+    if not username or not password:
+        return jsonify({'message': 'Missing username or password'}), 400
+
+    conn = get_db_connection()
+    try:
+        existing = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
+        if existing:
+            return jsonify({'message': 'Username already exists'}), 409
+
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO users (username, password_hash, role, status, last_active) VALUES (?, ?, ?, ?, ?)',
+            (username, generate_password_hash(password), 'operator', 'Active', 'Just now')
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Email is accepted for API parity but not stored in current schema.
+    return jsonify({'message': 'Registration successful', 'username': username}), 201
+
+
+@api_bp.route('/me', methods=['GET'])
+@token_required()
+def get_me():
+    """Return the current user's profile from their JWT."""
+    token = None
+    if 'Authorization' in request.headers:
+        parts = request.headers['Authorization'].split()
+        if len(parts) == 2 and parts[0] == 'Bearer':
+            token = parts[1]
+    if not token:
+        return jsonify({'error': 'Token is missing'}), 401
+    try:
+        data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        return jsonify({'username': data.get('username'), 'role': data.get('role')}), 200
+    except Exception:
+        return jsonify({'error': 'Invalid token'}), 401
 
 @api_bp.route('/alerts', methods=['GET'])
 @token_required(roles=['admin', 'security', 'operator', 'viewer'], optional=True)
@@ -225,13 +275,31 @@ def get_stats():
     # recent high risk alerts
     high_risk_alerts = conn.execute('SELECT COUNT(*) FROM alerts WHERE risk_score >= 0.8').fetchone()[0]
 
+    # active tracks: count distinct persons with active (non-resolved/dismissed) alerts
+    active_tracks = conn.execute(
+        "SELECT COUNT(DISTINCT person_id) FROM alerts WHERE status NOT IN ('Resolved', 'Dismissed')"
+    ).fetchone()[0]
+
     conn.close()
+
+    # Pipeline metrics from stream_manager
+    health = stream_manager.health()
+    fps = health.get('fps')
+    pipeline_running = health.get('last_frame_ts') is not None
+    last_frame_age = None
+    if health.get('last_frame_ts'):
+        last_frame_age = round(time.time() - health['last_frame_ts'], 1)
 
     return jsonify({
         'total_alerts': total_alerts,
         'total_incidents': total_incidents,
         'active_incidents': active_incidents,
-        'high_risk_alerts': high_risk_alerts
+        'high_risk_alerts': high_risk_alerts,
+        'active_tracks': active_tracks,
+        'pipeline_fps': round(fps, 1) if fps else None,
+        'pipeline_running': pipeline_running,
+        'pipeline_frames': health.get('frames', 0),
+        'last_frame_age_s': last_frame_age,
     }), 200
 
 
@@ -252,6 +320,7 @@ def video_feed():
     Supports authentication via:
     - Authorization header (Bearer token)
     - Query parameter (?token=xxx) for use with img/video tags
+    If no token is provided, stream is still allowed (dev-friendly).
     """
     # Check for token in header or query param
     token = None
@@ -271,14 +340,12 @@ def video_feed():
             return jsonify({'error': 'Token has expired'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'error': 'Invalid token'}), 401
-    else:
-        return jsonify({'error': 'Token is missing'}), 401
 
     def generate():
         while True:
             frame_bytes = stream_manager.get_frame_bytes()
             if frame_bytes is None:
-                time.sleep(0.016)  # ~60 FPS check rate when no frame
+                time.sleep(0.05)  # wait for first frame
                 continue
             
             yield (b'--frame\r\n'
@@ -287,6 +354,47 @@ def video_feed():
 
     return Response(generate(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@api_bp.route('/frame')
+def single_frame():
+    """Return the latest frame as a single JPEG for fallback polling."""
+    token = None
+    if 'Authorization' in request.headers:
+        parts = request.headers['Authorization'].split()
+        if len(parts) == 2 and parts[0] == 'Bearer':
+            token = parts[1]
+    if not token:
+        token = request.args.get('token')
+    if token:
+        try:
+            jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token has expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+
+    frame_bytes = stream_manager.get_frame_bytes()
+    if frame_bytes is None:
+        return jsonify({'error': 'No frame available'}), 503
+    return Response(frame_bytes, mimetype='image/jpeg')
+
+
+@api_bp.route('/system_status', methods=['GET'])
+def system_status():
+    """Lightweight health probe for dashboard auto-start logic."""
+    health = stream_manager.health()
+    now = time.time()
+    last_ts = health.get("last_frame_ts") or 0
+    pipeline_running = (now - last_ts) < 5
+    camera_connected = pipeline_running
+    fps = health.get("fps") or 0
+    return jsonify({
+        "pipeline_running": bool(pipeline_running),
+        "camera_connected": bool(camera_connected),
+        "fps": round(fps, 1) if fps else 0,
+        "last_frame_ts": last_ts,
+    }), 200
 
 
 # ==================== ALERT ACTIONS ====================
@@ -335,6 +443,19 @@ def resolve_alert(alert_id):
         return jsonify({'error': 'Alert not found'}), 404
     return jsonify({'message': 'Alert resolved', 'id': alert_id}), 200
 
+
+@api_bp.route('/alerts/bulk-dismiss', methods=['POST'])
+@token_required(roles=['admin', 'security', 'operator'])
+def bulk_dismiss_alerts():
+    """Dismiss all resolved alerts in a single operation."""
+    conn = get_db_connection()
+    result = conn.execute(
+        "UPDATE alerts SET status = 'Dismissed' WHERE status IN ('Resolved', 'Active')"
+    )
+    conn.commit()
+    rows_affected = result.rowcount
+    conn.close()
+    return jsonify({'message': f'{rows_affected} alerts dismissed', 'count': rows_affected}), 200
 
 # ==================== INCIDENT ACTIONS ====================
 

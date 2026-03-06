@@ -23,21 +23,33 @@ export async function apiFetch(
         headers.set("Authorization", `Bearer ${token}`);
     }
 
-    const res = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers,
-    });
-
-    // Handle auth errors globally - treat any 401 as auth failure
-    if (res.status === 401) {
-        // Optionally log the body for debugging
-        res.clone().json().catch(() => ({})).then((data) => {
-            console.warn("[api] 401 Unauthorized:", data?.error || "Unknown auth error");
+    try {
+        const res = await fetch(`${API_BASE}${endpoint}`, {
+            ...options,
+            headers,
         });
-        handleAuthError();
-    }
 
-    return res;
+        // Handle auth errors globally - treat any 401 as auth failure
+        if (res.status === 401) {
+            res
+                .clone()
+                .json()
+                .catch(() => ({}))
+                .then((data) => {
+                    console.warn("[api] 401 Unauthorized:", data?.error || "Unknown auth error");
+                });
+            handleAuthError();
+        }
+
+        return res;
+    } catch (err) {
+        console.error("[api] network error", err);
+        // Normalize to a rejected Response-like object so callers can handle gracefully
+        return new Response(
+            JSON.stringify({ error: "Network error. Is the backend running at " + API_BASE + "?" }),
+            { status: 503, headers: { "Content-Type": "application/json" } }
+        );
+    }
 }
 
 export async function login(
@@ -74,6 +86,21 @@ export async function getStats() {
 
 export async function getUsers() {
     const res = await apiFetch("/users");
+    return res.json();
+}
+
+export async function getMe() {
+    const res = await apiFetch("/me");
+    if (!res.ok) return null;
+    return res.json();
+}
+
+export async function bulkDismissAlerts() {
+    const res = await apiFetch("/alerts/bulk-dismiss", { method: "POST" });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to bulk dismiss alerts");
+    }
     return res.json();
 }
 
